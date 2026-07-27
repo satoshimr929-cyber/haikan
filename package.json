@@ -1,0 +1,10 @@
+{
+  "name": "haikan",
+  "version": "1.0.0",
+  "description": "電気配管工事の配管ピッチ（芯々距離）・割り付けと電線管寸法の計算ツール",
+  "private": true,
+  "scripts": {
+    "test": "node test/calc.test.js"
+  },
+  "license": "MIT"
+}
