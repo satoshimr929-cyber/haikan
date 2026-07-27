@@ -120,30 +120,44 @@
       short: 'PE管',
       std: 'JIS C 8380 G形',
       note: '鋼管部は厚鋼電線管（JIS C 8305・G管）と同寸で、その内外面にポリエチレンを被覆したもの。' +
-        '地中埋設や塩害・薬品のある場所に使います。' +
-        'このアプリの外径・内径は被覆厚を片側 0.6mm として計算した代表値です。' +
-        '被覆厚には公差（0.6±0.2mm 程度）があり、外面を2層にするなどメーカーの構造によっても変わるため、' +
-        '芯々を詰める場合はカタログの仕上がり外径を「直接入力」で入れてください。' +
-        '鋼管外径は PE16=21.0、PE22=26.5、PE28=33.3、PE36=41.9、PE42=47.8、PE54=59.6、' +
-        'PE70=75.2、PE82=87.9、PE92=100.7、PE104=113.4（mm）。ラインナップはメーカーにより異なります。',
+        '呼びも厚鋼電線管と同じ G16〜G104 です。地中埋設や塩害・薬品のある場所に使います。' +
+        '外径（仕上外径）と鋼管の外径はパナソニックのカタログ値。' +
+        '被覆厚は外面が片側 0.6mm（仕上外径 − 鋼管の外径 ÷ 2）です。' +
+        '内径は内面被覆も 0.6mm として計算した代表値なので、通線本数を詰める場合はカタログで確認してください。' +
+        'ラインナップと仕上外径はメーカーにより異なります。',
       approx: true,
-      approxNote: '外径・内径は代表値',
-      // steelOd = 被覆前の鋼管外径 / t = 鋼管の肉厚 / coating = 被覆厚（片側・内外面とも）
-      // od = steelOd + coating×2、id = steelOd − t×2 − coating×2
+      approxNote: '内径は代表値',
+      // steelOd = 被覆前の鋼管外径 / t = 鋼管の肉厚 / coating = 被覆厚（片側）/ code = 品番
+      // od（仕上外径）と steelOd はカタログ値。id = steelOd − t×2 − coating×2 は代表値。
       sizes: [
-        { name: 'PE16', nominal: 16, steelOd: 21.0, t: 2.3, coating: 0.6, od: 22.2, id: 15.2 },
-        { name: 'PE22', nominal: 22, steelOd: 26.5, t: 2.3, coating: 0.6, od: 27.7, id: 20.7 },
-        { name: 'PE28', nominal: 28, steelOd: 33.3, t: 2.5, coating: 0.6, od: 34.5, id: 27.1 },
-        { name: 'PE36', nominal: 36, steelOd: 41.9, t: 2.5, coating: 0.6, od: 43.1, id: 35.7 },
-        { name: 'PE42', nominal: 42, steelOd: 47.8, t: 2.5, coating: 0.6, od: 49.0, id: 41.6 },
-        { name: 'PE54', nominal: 54, steelOd: 59.6, t: 2.8, coating: 0.6, od: 60.8, id: 52.8 },
-        { name: 'PE70', nominal: 70, steelOd: 75.2, t: 2.8, coating: 0.6, od: 76.4, id: 68.4 },
-        { name: 'PE82', nominal: 82, steelOd: 87.9, t: 2.8, coating: 0.6, od: 89.1, id: 81.1 },
-        { name: 'PE92', nominal: 92, steelOd: 100.7, t: 3.5, coating: 0.6, od: 101.9, id: 92.5 },
-        { name: 'PE104', nominal: 104, steelOd: 113.4, t: 3.5, coating: 0.6, od: 114.6, id: 105.2 }
+        { name: 'G16', code: 'DWL16K', nominal: 16, steelOd: 21.0, t: 2.3, coating: 0.6, od: 22.2, id: 15.2 },
+        { name: 'G22', code: 'DWL22K', nominal: 22, steelOd: 26.5, t: 2.3, coating: 0.6, od: 27.7, id: 20.7 },
+        { name: 'G28', code: 'DWL28K', nominal: 28, steelOd: 33.3, t: 2.5, coating: 0.6, od: 34.5, id: 27.1 },
+        { name: 'G36', code: 'DWL36K', nominal: 36, steelOd: 41.9, t: 2.5, coating: 0.6, od: 43.1, id: 35.7 },
+        { name: 'G42', code: 'DWL42K', nominal: 42, steelOd: 47.8, t: 2.5, coating: 0.6, od: 49.0, id: 41.6 },
+        { name: 'G54', code: 'DWL54K', nominal: 54, steelOd: 59.6, t: 2.8, coating: 0.6, od: 60.8, id: 52.8 },
+        { name: 'G70', code: 'DWL70K', nominal: 70, steelOd: 75.2, t: 2.8, coating: 0.6, od: 76.4, id: 68.4 },
+        { name: 'G82', code: 'DWL82K', nominal: 82, steelOd: 87.9, t: 2.8, coating: 0.6, od: 89.1, id: 81.1 },
+        { name: 'G92', code: 'DWL92K', nominal: 92, steelOd: 100.7, t: 3.5, coating: 0.6, od: 101.9, id: 92.5 },
+        { name: 'G104', code: 'DWL04K', nominal: 104, steelOd: 113.4, t: 3.5, coating: 0.6, od: 114.6, id: 105.2 }
       ]
     }
   ];
+
+  /* PE管は呼びが厚鋼電線管と同じ G16… なので、名前だけではシリーズを特定できない。
+   * シリーズ込みの一意キー（"PE:G16"）と、重複時にシリーズ名を足した表示ラベルを用意する。 */
+  (function assignKeys() {
+    var seen = {};
+    PIPE_SERIES.forEach(function (s) {
+      s.sizes.forEach(function (z) { seen[z.name] = (seen[z.name] || 0) + 1; });
+    });
+    PIPE_SERIES.forEach(function (s) {
+      s.sizes.forEach(function (z) {
+        z.key = s.id + ':' + z.name;
+        z.label = seen[z.name] > 1 ? s.short + ' ' + z.name : z.name;
+      });
+    });
+  })();
 
   /** 全シリーズのサイズを 1 本の配列に展開（シリーズ情報付き） */
   function allSizes() {
@@ -156,7 +170,10 @@
           seriesShort: s.short,
           std: s.std,
           approx: !!s.approx,
+          key: z.key,
           name: z.name,
+          label: z.label,
+          code: z.code,
           nominal: z.nominal,
           od: z.od,
           id: z.id,
@@ -169,13 +186,17 @@
     return out;
   }
 
-  /** 呼び名（"E25" など、大文字小文字を無視）で 1 サイズを引く */
+  /**
+   * サイズを 1 件引く。大文字小文字は無視。
+   * シリーズ込みのキー（"PE:G16"）でも、呼びだけ（"E25"）でも引ける。
+   * 呼びが複数シリーズで重複する場合（G16 など）は、先に定義されたシリーズを返す。
+   */
   function findSize(name) {
     if (!name) return null;
-    var key = String(name).trim().toUpperCase();
-    var hit = allSizes().filter(function (z) {
-      return z.name.toUpperCase() === key;
-    });
+    var q = String(name).trim().toUpperCase();
+    var all = allSizes();
+    var hit = all.filter(function (z) { return z.key.toUpperCase() === q; });
+    if (!hit.length) hit = all.filter(function (z) { return z.name.toUpperCase() === q; });
     return hit.length ? hit[0] : null;
   }
 

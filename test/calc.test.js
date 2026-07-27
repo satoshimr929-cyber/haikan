@@ -20,6 +20,12 @@ function eq(name, actual, expected, tol) {
   else { fail++; console.log('  FAIL ' + name + '  期待 ' + expected + ' / 実際 ' + actual); }
 }
 
+/** 文字列など、数値以外の完全一致 */
+function is(name, actual, expected) {
+  if (actual === expected) { pass++; console.log('  ok   ' + name); }
+  else { fail++; console.log('  FAIL ' + name + '  期待 "' + expected + '" / 実際 "' + actual + '"'); }
+}
+
 function throws(name, fn) {
   try { fn(); fail++; console.log('  FAIL ' + name + '  例外が出ませんでした'); }
   catch (e) { pass++; console.log('  ok   ' + name); }
@@ -114,29 +120,57 @@ check('肉厚がある管は 内径 = 外径 − 肉厚×2 − 被覆厚×4', si
 check('被覆管は 外径 = 鋼管外径 + 被覆厚×2', sizes.every(function (z) {
   return z.steelOd === undefined || near(z.od, z.steelOd + z.coating * 2, 0.05);
 }));
-check('呼び名は重複していない',
-  new Set(sizes.map(function (z) { return z.name; })).size === sizes.length);
+check('シリーズ込みのキーは重複していない',
+  new Set(sizes.map(function (z) { return z.key; })).size === sizes.length);
+check('呼びが重複するサイズは表示ラベルにシリーズ名が付く', sizes.every(function (z) {
+  var dup = sizes.filter(function (o) { return o.name === z.name; }).length > 1;
+  return dup ? z.label !== z.name && z.label.indexOf(z.name) >= 0 : z.label === z.name;
+}));
 check('各シリーズが外径の昇順', D.PIPE_SERIES.every(function (s) {
   return s.sizes.every(function (z, i) { return i === 0 || z.od > s.sizes[i - 1].od; });
 }));
 eq('findSize("E25") の外径', D.findSize('E25').od, 25.4);
-// ポリエチライニング電線管（JIS C 8380 G形）は鋼管部が厚鋼電線管と同寸
+// ポリエチライニング電線管（JIS C 8380 G形）は鋼管部が厚鋼電線管と同寸。
+// 呼び / 品番 / 仕上外径 / 鋼管の外径 はパナソニックのカタログ値。
 var PE = D.findSeries('PE');
+var CATALOG = [
+  ['G16', 'DWL16K', 22.2, 21.0], ['G22', 'DWL22K', 27.7, 26.5],
+  ['G28', 'DWL28K', 34.5, 33.3], ['G36', 'DWL36K', 43.1, 41.9],
+  ['G42', 'DWL42K', 49.0, 47.8], ['G54', 'DWL54K', 60.8, 59.6],
+  ['G70', 'DWL70K', 76.4, 75.2], ['G82', 'DWL82K', 89.1, 87.9],
+  ['G92', 'DWL92K', 101.9, 100.7], ['G104', 'DWL04K', 114.6, 113.4]
+];
+eq('カタログと同じサイズ数', PE.sizes.length, CATALOG.length);
+CATALOG.forEach(function (row, i) {
+  var z = PE.sizes[i];
+  check('カタログ ' + row[0] + '：呼び・品番・仕上外径・鋼管外径が一致',
+    z.name === row[0] && z.code === row[1] &&
+    near(z.od, row[2], 1e-9) && near(z.steelOd, row[3], 1e-9));
+});
 check('PE管の鋼管外径は G管の外径とすべて一致', PE.sizes.every(function (z) {
-  var g = D.findSize('G' + z.nominal);
-  return g && near(z.steelOd, g.od, 1e-9);
+  return near(z.steelOd, D.findSize('G:' + z.name).od, 1e-9);
 }));
 check('PE管の肉厚は G管の肉厚とすべて一致', PE.sizes.every(function (z) {
-  return near(z.t, D.findSize('G' + z.nominal).t, 1e-9);
+  return near(z.t, D.findSize('G:' + z.name).t, 1e-9);
 }));
-eq('PE28 の外径 = 33.3 + 0.6×2', D.findSize('PE28').od, 34.5);
-eq('PE28 の内径 = 33.3 − 2.5×2 − 0.6×2', D.findSize('PE28').id, 27.1);
-check('PE管は全サイズに被覆厚がある',
-  PE.sizes.every(function (z) { return z.coating > 0; }));
-check('PE管は代表値として印が付いている', PE.approx === true);
+check('外面被覆はどのサイズも片側0.6mm', PE.sizes.every(function (z) {
+  return near((z.od - z.steelOd) / 2, 0.6, 1e-9);
+}));
 check('被覆のぶん PE管は同じ呼びの G管より外径が大きい', PE.sizes.every(function (z) {
-  return z.od > D.findSize('G' + z.nominal).od;
+  return z.od > D.findSize('G:' + z.name).od;
 }));
+check('PE管は内径が代表値である旨の印が付いている',
+  PE.approx === true && PE.approxNote === '内径は代表値');
+
+console.log('\n呼びが重複するサイズの引き方');
+eq('"G:G28" は G管の 33.3', D.findSize('G:G28').od, 33.3);
+eq('"PE:G28" は PE管の 34.5', D.findSize('PE:G28').od, 34.5);
+eq('呼びだけの "G28" は先に定義された G管', D.findSize('G28').od, 33.3);
+eq('キーは小文字でも引ける', D.findSize('pe:g28').od, 34.5);
+is('PE管の表示ラベルはシリーズ名付き', D.findSize('PE:G28').label, 'PE管 G28');
+is('G管の表示ラベルもシリーズ名付き', D.findSize('G:G28').label, 'G管 G28');
+is('重複しない呼びのラベルはそのまま', D.findSize('E25').label, 'E25');
+is('PE管の品番が引ける', D.findSize('PE:G28').code, 'DWL28K');
 eq('小文字でも引ける', D.findSize('e25').od, 25.4);
 check('無いサイズは null', D.findSize('X99') === null);
 

@@ -51,13 +51,18 @@
     D.PIPE_SERIES.forEach(function (s) {
       html += '<optgroup label="' + esc(s.short + '（' + s.name + '）') + '">';
       s.sizes.forEach(function (z) {
-        html += '<option value="' + esc(z.name) + '">' +
-          esc(z.name + '  外径 ' + fmt(z.od) + 'mm') + '</option>';
+        html += '<option value="' + esc(z.key) + '">' +
+          esc(z.name + (z.code ? '／' + z.code : '') + '  外径 ' + fmt(z.od) + 'mm') +
+          '</option>';
       });
       html += '</optgroup>';
     });
     sel.innerHTML = html;
-    if (defaultName) sel.value = defaultName;
+    // 呼びだけ渡されてもシリーズ込みのキーに解決してから選ぶ
+    if (defaultName) {
+      var size = D.findSize(defaultName);
+      sel.value = size ? size.key : defaultName;
+    }
   }
 
   /** セレクト＋直接入力欄から外径とラベルを取り出す */
@@ -71,7 +76,7 @@
     odInput.hidden = true;
     var size = D.findSize(sel.value);
     if (!size) return null;
-    return { od: size.od, label: size.name, size: size };
+    return { od: size.od, label: size.label, size: size };
   }
 
   /* ------------------------------------------------------------ 図の描画 */
@@ -495,7 +500,7 @@
     shown.forEach(function (s) {
       var sizes = s.sizes.filter(function (z) {
         if (!q) return true;
-        return (z.name + ' ' + s.name + ' ' + s.short + ' ' + s.std)
+        return (z.name + ' ' + (z.code || '') + ' ' + s.name + ' ' + s.short + ' ' + s.std)
           .toLowerCase().indexOf(q) >= 0;
       });
       if (!sizes.length) return;
@@ -506,7 +511,9 @@
           esc(s.approxNote || '外径は代表値') + '）</span>' : '') +
         '</td></tr>';
       sizes.forEach(function (z) {
-        html += '<tr><td>' + esc(z.name) + '</td><td>' + fmt(z.od) +
+        html += '<tr><td>' + esc(z.name) +
+          (z.code ? '<span class="code">' + esc(z.code) + '</span>' : '') +
+          '</td><td>' + fmt(z.od) +
           '</td><td>' + fmt(z.id) + '</td><td>' +
           (z.t === undefined ? '—' : fmt(z.t)) + '</td></tr>';
       });
