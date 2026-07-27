@@ -108,8 +108,11 @@ console.log('\n寸法データ');
 var sizes = D.allSizes();
 check('サイズが1件以上ある', sizes.length > 0);
 check('外径 > 内径 がすべてで成り立つ', sizes.every(function (z) { return z.od > z.id; }));
-check('肉厚がある管は 外径 = 内径 + (肉厚 + ライニング厚)×2', sizes.every(function (z) {
-  return z.t === undefined || near(z.od, z.id + (z.t + (z.lining || 0)) * 2, 0.05);
+check('肉厚がある管は 内径 = 外径 − 肉厚×2 − 被覆厚×4', sizes.every(function (z) {
+  return z.t === undefined || near(z.id, z.od - z.t * 2 - (z.coating || 0) * 4, 0.05);
+}));
+check('被覆管は 外径 = 鋼管外径 + 被覆厚×2', sizes.every(function (z) {
+  return z.steelOd === undefined || near(z.od, z.steelOd + z.coating * 2, 0.05);
 }));
 check('呼び名は重複していない',
   new Set(sizes.map(function (z) { return z.name; })).size === sizes.length);
@@ -117,11 +120,23 @@ check('各シリーズが外径の昇順', D.PIPE_SERIES.every(function (s) {
   return s.sizes.every(function (z, i) { return i === 0 || z.od > s.sizes[i - 1].od; });
 }));
 eq('findSize("E25") の外径', D.findSize('E25').od, 25.4);
-eq('ライニング鋼管 25A の外径は SGP と同じ 34.0', D.findSize('25A').od, 34.0);
-eq('ライニング鋼管 25A の内径 = 34.0 − (3.2+0.5)×2', D.findSize('25A').id, 26.6);
-check('ライニング鋼管は全サイズに lining がある',
-  D.findSeries('PLP').sizes.every(function (z) { return z.lining > 0; }));
-check('ライニング鋼管は代表値として印が付いている', D.findSeries('PLP').approx === true);
+// ポリエチライニング電線管（JIS C 8380 G形）は鋼管部が厚鋼電線管と同寸
+var PE = D.findSeries('PE');
+check('PE管の鋼管外径は G管の外径とすべて一致', PE.sizes.every(function (z) {
+  var g = D.findSize('G' + z.nominal);
+  return g && near(z.steelOd, g.od, 1e-9);
+}));
+check('PE管の肉厚は G管の肉厚とすべて一致', PE.sizes.every(function (z) {
+  return near(z.t, D.findSize('G' + z.nominal).t, 1e-9);
+}));
+eq('PE28 の外径 = 33.3 + 0.6×2', D.findSize('PE28').od, 34.5);
+eq('PE28 の内径 = 33.3 − 2.5×2 − 0.6×2', D.findSize('PE28').id, 27.1);
+check('PE管は全サイズに被覆厚がある',
+  PE.sizes.every(function (z) { return z.coating > 0; }));
+check('PE管は代表値として印が付いている', PE.approx === true);
+check('被覆のぶん PE管は同じ呼びの G管より外径が大きい', PE.sizes.every(function (z) {
+  return z.od > D.findSize('G' + z.nominal).od;
+}));
 eq('小文字でも引ける', D.findSize('e25').od, 25.4);
 check('無いサイズは null', D.findSize('X99') === null);
 

@@ -1,10 +1,12 @@
 /* 電線管の寸法データ
  * 数値の単位はすべて mm。
- * od = 外径 / id = 内径 / t = 管体の肉厚 / lining = 内面ライニング厚（片側・ある場合のみ）
+ * od = 外径 / id = 内径 / t = 管体の肉厚
+ * 被覆管はさらに steelOd = 被覆前の鋼管外径 / coating = 被覆厚（片側）を持ち、
+ *   od = steelOd + coating×2、id = steelOd − t×2 − coating×2 の関係になります。
  * 鋼製電線管は JIS C 8305、硬質ビニル電線管は JIS C 8430 の規格値。
  * PF管・CD管は JIS C 8411 に基づく代表値で、メーカーにより数 mm の差があります。
- * ポリエチレン粉体ライニング鋼管は原管が JIS G 3452（SGP）、ライニングが JWWA K 132。
- * 内径はライニング厚を差し引いた代表値です。
+ * ポリエチライニング電線管は JIS C 8380 G形。鋼管部は厚鋼電線管と同寸で、
+ * 被覆厚は 0.6mm（公差 ±0.2mm 程度）を代表値として計算しています。
  */
 (function (root) {
   'use strict';
@@ -113,30 +115,32 @@
       ]
     },
     {
-      id: 'PLP',
-      name: 'ポリエチレン粉体ライニング鋼管',
-      short: 'ライニング鋼管',
-      std: 'JIS G 3452 / JWWA K 132',
-      note: '外径と肉厚は原管（配管用炭素鋼鋼管 SGP）の規格値。内径は内面ライニング厚を差し引いた代表値で、' +
-        'ライニング厚はメーカー・呼び径により差があります。外面にも被覆のある SGP-PB は外径が約1mm大きくなるため、' +
-        '芯々を詰める場合は「直接入力」で実際の外径を入れてください。' +
-        'B呼称は 15A=1/2B、20A=3/4B、25A=1B、32A=1¼B、40A=1½B、50A=2B、65A=2½B、80A=3B、100A=4B、125A=5B、150A=6B、200A=8B。',
+      id: 'PE',
+      name: 'ポリエチライニング電線管（ねじ付き）',
+      short: 'PE管',
+      std: 'JIS C 8380 G形',
+      note: '鋼管部は厚鋼電線管（JIS C 8305・G管）と同寸で、その内外面にポリエチレンを被覆したもの。' +
+        '地中埋設や塩害・薬品のある場所に使います。' +
+        'このアプリの外径・内径は被覆厚を片側 0.6mm として計算した代表値です。' +
+        '被覆厚には公差（0.6±0.2mm 程度）があり、外面を2層にするなどメーカーの構造によっても変わるため、' +
+        '芯々を詰める場合はカタログの仕上がり外径を「直接入力」で入れてください。' +
+        '鋼管外径は PE16=21.0、PE22=26.5、PE28=33.3、PE36=41.9、PE42=47.8、PE54=59.6、' +
+        'PE70=75.2、PE82=87.9、PE92=100.7、PE104=113.4（mm）。ラインナップはメーカーにより異なります。',
       approx: true,
-      approxNote: '内径は代表値',
-      // t = 鋼管の肉厚 / lining = 内面ライニング厚（片側）。内径は両方を差し引いた値。
+      approxNote: '外径・内径は代表値',
+      // steelOd = 被覆前の鋼管外径 / t = 鋼管の肉厚 / coating = 被覆厚（片側・内外面とも）
+      // od = steelOd + coating×2、id = steelOd − t×2 − coating×2
       sizes: [
-        { name: '15A', nominal: 15, od: 21.7, t: 2.8, lining: 0.5, id: 15.1 },
-        { name: '20A', nominal: 20, od: 27.2, t: 2.8, lining: 0.5, id: 20.6 },
-        { name: '25A', nominal: 25, od: 34.0, t: 3.2, lining: 0.5, id: 26.6 },
-        { name: '32A', nominal: 32, od: 42.7, t: 3.5, lining: 0.5, id: 34.7 },
-        { name: '40A', nominal: 40, od: 48.6, t: 3.5, lining: 0.5, id: 40.6 },
-        { name: '50A', nominal: 50, od: 60.5, t: 3.8, lining: 0.5, id: 51.9 },
-        { name: '65A', nominal: 65, od: 76.3, t: 4.2, lining: 0.5, id: 66.9 },
-        { name: '80A', nominal: 80, od: 89.1, t: 4.2, lining: 0.5, id: 79.7 },
-        { name: '100A', nominal: 100, od: 114.3, t: 4.5, lining: 0.5, id: 104.3 },
-        { name: '125A', nominal: 125, od: 139.8, t: 4.5, lining: 0.5, id: 129.8 },
-        { name: '150A', nominal: 150, od: 165.2, t: 5.0, lining: 0.5, id: 154.2 },
-        { name: '200A', nominal: 200, od: 216.3, t: 5.8, lining: 1.0, id: 202.7 }
+        { name: 'PE16', nominal: 16, steelOd: 21.0, t: 2.3, coating: 0.6, od: 22.2, id: 15.2 },
+        { name: 'PE22', nominal: 22, steelOd: 26.5, t: 2.3, coating: 0.6, od: 27.7, id: 20.7 },
+        { name: 'PE28', nominal: 28, steelOd: 33.3, t: 2.5, coating: 0.6, od: 34.5, id: 27.1 },
+        { name: 'PE36', nominal: 36, steelOd: 41.9, t: 2.5, coating: 0.6, od: 43.1, id: 35.7 },
+        { name: 'PE42', nominal: 42, steelOd: 47.8, t: 2.5, coating: 0.6, od: 49.0, id: 41.6 },
+        { name: 'PE54', nominal: 54, steelOd: 59.6, t: 2.8, coating: 0.6, od: 60.8, id: 52.8 },
+        { name: 'PE70', nominal: 70, steelOd: 75.2, t: 2.8, coating: 0.6, od: 76.4, id: 68.4 },
+        { name: 'PE82', nominal: 82, steelOd: 87.9, t: 2.8, coating: 0.6, od: 89.1, id: 81.1 },
+        { name: 'PE92', nominal: 92, steelOd: 100.7, t: 3.5, coating: 0.6, od: 101.9, id: 92.5 },
+        { name: 'PE104', nominal: 104, steelOd: 113.4, t: 3.5, coating: 0.6, od: 114.6, id: 105.2 }
       ]
     }
   ];
@@ -157,7 +161,8 @@
           od: z.od,
           id: z.id,
           t: z.t,
-          lining: z.lining
+          steelOd: z.steelOd,
+          coating: z.coating
         });
       });
     });
