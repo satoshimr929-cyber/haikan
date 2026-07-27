@@ -330,7 +330,9 @@
   /* ----------------------------------------------- モード3：サイズ混在 */
 
   var mixed = {
-    gap: $('#mixed-gap'), margin: $('#mixed-margin'),
+    mode: $('#mixed-mode'),
+    gap: $('#mixed-gap'), width: $('#mixed-width'), margin: $('#mixed-margin'),
+    gapField: $('#mixed-gap-field'), widthField: $('#mixed-width-field'),
     list: $('#mixed-list'), add: $('#mixed-add'), clear: $('#mixed-clear'),
     result: $('#mixed-result'), figure: $('#mixed-figure'), marks: $('#mixed-marks')
   };
@@ -353,6 +355,9 @@
   }
 
   function renderMixed() {
+    mixed.gapField.hidden = mixed.mode.value === 'width';
+    mixed.widthField.hidden = mixed.mode.value !== 'width';
+
     var rows = $$('.pipe-row', mixed.list);
     rows.forEach(function (r, i) { $('.idx', r).textContent = String(i + 1); });
 
@@ -370,26 +375,41 @@
       return;
     }
 
-    var gap = parseFloat(mixed.gap.value);
+    var byWidth = mixed.mode.value === 'width';
     var margin = parseFloat(mixed.margin.value);
-    var out;
+    var gap, out;
     try {
-      out = C.layoutMixed(pipes, gap, margin);
+      if (byWidth) {
+        out = C.layoutMixedInWidth(pipes, parseFloat(mixed.width.value), margin);
+        gap = out.gap;
+      } else {
+        gap = parseFloat(mixed.gap.value);
+        out = C.layoutMixed(pipes, gap, margin);
+      }
     } catch (e) {
       mixed.result.innerHTML = msg(e.message, 'warn');
       mixed.figure.innerHTML = ''; mixed.marks.innerHTML = '';
       return;
     }
 
-    var html = big('必要な総幅', fmt(out.totalWidth), 'mm');
+    var html = byWidth
+      ? big('管と管のあき', fmt(gap), 'mm')
+      : big('必要な総幅', fmt(out.totalWidth), 'mm');
     html += kv([
       ['本数', pipes.length + ' 本'],
-      ['端の管の外面〜外面', fmt(out.span) + ' mm'],
+      ['総幅', fmt(out.totalWidth) + ' mm'],
       ['管と管のあき', fmt(gap) + ' mm'],
+      ['端の管の外面〜外面', fmt(out.span) + ' mm'],
       ['端あき（片側）', fmt(margin) + ' mm']
     ]);
     if (incomplete) html += msg('外径が未入力の行は計算から外しています。', 'warn');
-    if (gap < 0) html += msg('あきがマイナスです。管が干渉します。', 'bad');
+    if (gap < 0) {
+      html += msg(byWidth
+        ? 'この総幅には収まりません。幅を広げるか、端あき・本数を見直してください。'
+        : 'あきがマイナスです。管が干渉します。', 'bad');
+    } else if (byWidth && gap < 5) {
+      html += msg('あきが 5mm 未満です。サドルや継手が入るか確認してください。', 'warn');
+    }
     mixed.result.innerHTML = html;
 
     var items = out.items.map(function (it) {
@@ -482,7 +502,8 @@
       hits += sizes.length;
       html += '<tr class="series-head"><td colspan="4">' +
         esc(s.short + '　' + s.name) +
-        (s.approx ? ' <span class="approx-mark">（外径は代表値）</span>' : '') +
+        (s.approx ? ' <span class="approx-mark">（' +
+          esc(s.approxNote || '外径は代表値') + '）</span>' : '') +
         '</td></tr>';
       sizes.forEach(function (z) {
         html += '<tr><td>' + esc(z.name) + '</td><td>' + fmt(z.od) +
@@ -558,7 +579,7 @@
     bind([two.p1, two.p1od, two.p2, two.p2od, two.dir, two.gap, two.pitch], renderTwo);
     bind([even.pipe, even.pipeOd, even.width, even.margin, even.mode,
       even.gap, even.count, even.pitch], renderEven);
-    bind([mixed.gap, mixed.margin], renderMixed);
+    bind([mixed.mode, mixed.gap, mixed.width, mixed.margin], renderMixed);
     bind([stag.pitch, stag.angle, stag.count], renderStagger);
     bind([tbl.series, tbl.search], renderTable);
 

@@ -155,6 +155,37 @@
   }
 
   /**
+   * 総幅から管と管のあきを逆算する。
+   * 決まった幅の中に外径の違う管を等間隔で収めたいときに使う。
+   * @param {Array<{od:number,label?:string}>} pipes
+   * @param {number} totalWidth 端あきを含む総幅
+   * @param {number} margin     端あき
+   * @returns {number} 管と管のあき（負なら収まらない）
+   */
+  function gapForWidth(pipes, totalWidth, margin) {
+    if (!Array.isArray(pipes) || pipes.length < 2) {
+      throw new Error('あきを逆算するには配管を2本以上並べてください');
+    }
+    req(totalWidth, '総幅'); req(margin, '端あき');
+    var sum = pipes.reduce(function (acc, p, i) {
+      return acc + req(p.od, (i + 1) + '本目の外径');
+    }, 0);
+    return (totalWidth - 2 * margin - sum) / (pipes.length - 1);
+  }
+
+  /**
+   * 総幅を指定して外径の違う管を等間隔に割り付ける。
+   * 戻り値は layoutMixed と同じ形に gap / fits を足したもの。
+   */
+  function layoutMixedInWidth(pipes, totalWidth, margin) {
+    var gap = gapForWidth(pipes, totalWidth, margin);
+    var out = layoutMixed(pipes, gap, margin);
+    out.gap = gap;
+    out.fits = gap >= 0;
+    return out;
+  }
+
+  /**
    * 並行して走る配管群を同じ角度で曲げるとき、隣の管の曲げ位置をどれだけ
    * 前後にずらすか（芯々ピッチ × tan(θ/2)）。
    * 90°なら ずらし量 = ピッチ そのものになる。
@@ -178,6 +209,8 @@
     layoutEven: layoutEven,
     requiredWidth: requiredWidth,
     layoutMixed: layoutMixed,
+    gapForWidth: gapForWidth,
+    layoutMixedInWidth: layoutMixedInWidth,
     parallelStagger: parallelStagger
   };
 

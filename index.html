@@ -136,12 +136,27 @@
   <div class="mode-panel" id="mode-mixed">
     <div class="card">
       <h2>径の違う管を並べる</h2>
-      <p class="hint">左から順に並べたときの各管の芯位置と、必要な総幅を出します。</p>
+      <p class="hint">
+        左から順に並べたときの各管の芯位置を出します。あきを決めて必要な総幅を出すか、
+        使える総幅を決めてあきを逆算するかを選べます。
+      </p>
+
+      <div class="field">
+        <label for="mixed-mode">求めるもの</label>
+        <select id="mixed-mode">
+          <option value="gap">あきを指定 → 総幅を出す</option>
+          <option value="width">総幅を指定 → あきを逆算</option>
+        </select>
+      </div>
 
       <div class="field-row">
-        <div class="field">
+        <div class="field" id="mixed-gap-field">
           <label for="mixed-gap">管と管のあき</label>
           <div class="unit"><input type="number" id="mixed-gap" step="1" value="20"><span>mm</span></div>
+        </div>
+        <div class="field" id="mixed-width-field" hidden>
+          <label for="mixed-width">総幅</label>
+          <div class="unit"><input type="number" id="mixed-width" step="1" value="400"><span>mm</span></div>
         </div>
         <div class="field">
           <label for="mixed-margin">端あき</label>
@@ -229,8 +244,9 @@
 
 <footer class="foot">
   <p>
-    鋼製電線管は JIS C 8305、硬質ビニル電線管は JIS C 8430 の規格値。PF管・CD管の外径は代表値で、
-    メーカーにより差があります。実施工では必ずメーカーカタログと施工要領で確認してください。
+    鋼製電線管は JIS C 8305、硬質ビニル電線管は JIS C 8430 の規格値。PF管・CD管の外径と、
+    ポリエチレン粉体ライニング鋼管の内径は代表値で、メーカーにより差があります。
+    実施工では必ずメーカーカタログと施工要領で確認してください。
   </p>
 </footer>
 
