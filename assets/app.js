@@ -386,17 +386,25 @@
       var el = $('.pitch-input', p.row);
       var kind = kindEl.value;
       var half = (pipes[i].od + p.od) / 2;
+      var fallback = kind === 'gap' ? base : half + base;
 
-      if (el.value === '') {
-        el.value = fmt(kind === 'gap' ? base : half + base);
-      } else if (kindEl.dataset.prevKind && kindEl.dataset.prevKind !== kind) {
-        // ピッチ ⇄ あき の切り替えで配置が飛ばないよう、半径ぶんを足し引きする
+      // ピッチ ⇄ あき の切り替えで配置が飛ばないよう、半径ぶんを足し引きする
+      if (el.value !== '' && kindEl.dataset.prevKind && kindEl.dataset.prevKind !== kind) {
         var v = parseFloat(el.value);
         if (isFinite(v)) el.value = fmt(kind === 'gap' ? v - half : v + half);
       }
       kindEl.dataset.prevKind = kind;
 
-      return { kind: kind, value: parseFloat(el.value) };
+      // 既定値を入れるのは最初の1回だけ。入力途中で消したときに
+      // 数字が勝手に復活しないよう、以降は空欄のままにする。
+      el.placeholder = fmt(fallback);
+      if (!el.dataset.init) {
+        el.dataset.init = '1';
+        if (el.value === '') el.value = fmt(fallback);
+      }
+
+      // 空欄はプレースホルダに出している既定値で計算する（結果が消えないように）
+      return { kind: kind, value: el.value === '' ? fallback : parseFloat(el.value) };
     });
   }
 
