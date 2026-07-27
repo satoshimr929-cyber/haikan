@@ -1,8 +1,10 @@
 /* 電線管の寸法データ
  * 数値の単位はすべて mm。
- * od = 外径 / id = 内径 / t = 肉厚
+ * od = 外径 / id = 内径 / t = 管体の肉厚 / lining = 内面ライニング厚（片側・ある場合のみ）
  * 鋼製電線管は JIS C 8305、硬質ビニル電線管は JIS C 8430 の規格値。
  * PF管・CD管は JIS C 8411 に基づく代表値で、メーカーにより数 mm の差があります。
+ * ポリエチレン粉体ライニング鋼管は原管が JIS G 3452（SGP）、ライニングが JWWA K 132。
+ * 内径はライニング厚を差し引いた代表値です。
  */
 (function (root) {
   'use strict';
@@ -109,6 +111,33 @@
         { name: 'VE82', nominal: 82, od: 89.0, t: 3.5, id: 82.0 },
         { name: 'VE100', nominal: 100, od: 114.0, t: 4.5, id: 105.0 }
       ]
+    },
+    {
+      id: 'PLP',
+      name: 'ポリエチレン粉体ライニング鋼管',
+      short: 'ライニング鋼管',
+      std: 'JIS G 3452 / JWWA K 132',
+      note: '外径と肉厚は原管（配管用炭素鋼鋼管 SGP）の規格値。内径は内面ライニング厚を差し引いた代表値で、' +
+        'ライニング厚はメーカー・呼び径により差があります。外面にも被覆のある SGP-PB は外径が約1mm大きくなるため、' +
+        '芯々を詰める場合は「直接入力」で実際の外径を入れてください。' +
+        'B呼称は 15A=1/2B、20A=3/4B、25A=1B、32A=1¼B、40A=1½B、50A=2B、65A=2½B、80A=3B、100A=4B、125A=5B、150A=6B、200A=8B。',
+      approx: true,
+      approxNote: '内径は代表値',
+      // t = 鋼管の肉厚 / lining = 内面ライニング厚（片側）。内径は両方を差し引いた値。
+      sizes: [
+        { name: '15A', nominal: 15, od: 21.7, t: 2.8, lining: 0.5, id: 15.1 },
+        { name: '20A', nominal: 20, od: 27.2, t: 2.8, lining: 0.5, id: 20.6 },
+        { name: '25A', nominal: 25, od: 34.0, t: 3.2, lining: 0.5, id: 26.6 },
+        { name: '32A', nominal: 32, od: 42.7, t: 3.5, lining: 0.5, id: 34.7 },
+        { name: '40A', nominal: 40, od: 48.6, t: 3.5, lining: 0.5, id: 40.6 },
+        { name: '50A', nominal: 50, od: 60.5, t: 3.8, lining: 0.5, id: 51.9 },
+        { name: '65A', nominal: 65, od: 76.3, t: 4.2, lining: 0.5, id: 66.9 },
+        { name: '80A', nominal: 80, od: 89.1, t: 4.2, lining: 0.5, id: 79.7 },
+        { name: '100A', nominal: 100, od: 114.3, t: 4.5, lining: 0.5, id: 104.3 },
+        { name: '125A', nominal: 125, od: 139.8, t: 4.5, lining: 0.5, id: 129.8 },
+        { name: '150A', nominal: 150, od: 165.2, t: 5.0, lining: 0.5, id: 154.2 },
+        { name: '200A', nominal: 200, od: 216.3, t: 5.8, lining: 1.0, id: 202.7 }
+      ]
     }
   ];
 
@@ -127,7 +156,8 @@
           nominal: z.nominal,
           od: z.od,
           id: z.id,
-          t: z.t
+          t: z.t,
+          lining: z.lining
         });
       });
     });

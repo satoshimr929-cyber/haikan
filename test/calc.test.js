@@ -80,6 +80,22 @@ eq('同径を並べれば centerPitch と同じ',
   C.centerPitch(25.4, 25.4, 20).pitch);
 throws('空リストは例外', function () { C.layoutMixed([], 20, 30); });
 
+console.log('\ngapForWidth / layoutMixedInWidth（総幅からの逆算）');
+var three = [{ od: 25.4 }, { od: 31.8 }, { od: 50.8 }];
+eq('総幅208・端あき30・3本 → あき20', C.gapForWidth(three, 208, 30), 20);
+eq('layoutMixed と往復して総幅が一致',
+  C.layoutMixed(three, C.gapForWidth(three, 300, 30), 30).totalWidth, 300, 1e-9);
+var inw = C.layoutMixedInWidth(three, 300, 30);
+eq('逆算した配置の総幅は指定どおり', inw.totalWidth, 300, 1e-9);
+eq('逆算したあきが gap に入る', inw.gap, C.gapForWidth(three, 300, 30));
+eq('芯々ピッチ = 外径の平均 + あき', inw.pitches[0], (25.4 + 31.8) / 2 + inw.gap, 1e-9);
+check('余裕があれば fits=true', inw.fits === true);
+check('幅が足りなければ fits=false', C.layoutMixedInWidth(three, 150, 30).fits === false);
+eq('幅が足りなければ あきはマイナス',
+  C.gapForWidth(three, 150, 30) < 0, true);
+throws('1本では逆算できない', function () { C.gapForWidth([{ od: 25.4 }], 300, 30); });
+throws('総幅が数値でなければ例外', function () { C.gapForWidth(three, NaN, 30); });
+
 console.log('\nparallelStagger');
 eq('90°のずらし量はピッチと同じ', C.parallelStagger(75, 90).stagger, 75, 1e-9);
 eq('45°は 75×tan22.5° ≒ 31.07', C.parallelStagger(75, 45).stagger, 75 * Math.tan(Math.PI / 8), 1e-9);
@@ -92,8 +108,8 @@ console.log('\n寸法データ');
 var sizes = D.allSizes();
 check('サイズが1件以上ある', sizes.length > 0);
 check('外径 > 内径 がすべてで成り立つ', sizes.every(function (z) { return z.od > z.id; }));
-check('肉厚がある管は 外径 = 内径 + 肉厚×2', sizes.every(function (z) {
-  return z.t === undefined || near(z.od, z.id + z.t * 2, 0.05);
+check('肉厚がある管は 外径 = 内径 + (肉厚 + ライニング厚)×2', sizes.every(function (z) {
+  return z.t === undefined || near(z.od, z.id + (z.t + (z.lining || 0)) * 2, 0.05);
 }));
 check('呼び名は重複していない',
   new Set(sizes.map(function (z) { return z.name; })).size === sizes.length);
@@ -101,6 +117,11 @@ check('各シリーズが外径の昇順', D.PIPE_SERIES.every(function (s) {
   return s.sizes.every(function (z, i) { return i === 0 || z.od > s.sizes[i - 1].od; });
 }));
 eq('findSize("E25") の外径', D.findSize('E25').od, 25.4);
+eq('ライニング鋼管 25A の外径は SGP と同じ 34.0', D.findSize('25A').od, 34.0);
+eq('ライニング鋼管 25A の内径 = 34.0 − (3.2+0.5)×2', D.findSize('25A').id, 26.6);
+check('ライニング鋼管は全サイズに lining がある',
+  D.findSeries('PLP').sizes.every(function (z) { return z.lining > 0; }));
+check('ライニング鋼管は代表値として印が付いている', D.findSeries('PLP').approx === true);
 eq('小文字でも引ける', D.findSize('e25').od, 25.4);
 check('無いサイズは null', D.findSize('X99') === null);
 
