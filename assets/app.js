@@ -81,6 +81,15 @@
 
   /* ------------------------------------------------------------ 図の描画 */
 
+  /* 図の文字は CSS 側で 12px / 狭い画面では 17px に変わる。JS からは実際の
+   * 大きさが分からないので、余白はつねに大きいほうに合わせて確保する。
+   * LABEL_DROP = 寸法線からラベルのベースラインまで
+   * LABEL_ROOM = ラベルのベースラインから図の下端まで */
+  var LABEL_DROP = 20;
+  var LABEL_ROOM = 10;
+  /* 17px の文字が上端で切れないベースラインの下限（アセンダぶんの余裕） */
+  var LABEL_TOP = 20;
+
   /**
    * 配管の断面を横一列に描く。
    * items: [{center, od, label}]（center は左端 0 基準の mm）
@@ -96,10 +105,10 @@
     var s = Math.min((W - PAD * 2) / totalWidth, 120 / maxOd);
     var offX = (W - totalWidth * s) / 2;
 
-    var yLabel = 14;
+    var yLabel = LABEL_TOP;
     var railY = yLabel + 10 + maxOd * s;
     var dimY = railY + 26;
-    var H = dimY + 22;
+    var H = dimY + LABEL_DROP + LABEL_ROOM;
 
     var x = function (mm) { return offX + mm * s; };
     var out = [];
@@ -133,7 +142,7 @@
       });
       // 幅が狭いラベルは省略して重なりを避ける
       if (Math.abs(x2 - x1) > 30) {
-        out.push('<text x="' + ((x1 + x2) / 2).toFixed(1) + '" y="' + (dimY + 17) +
+        out.push('<text x="' + ((x1 + x2) / 2).toFixed(1) + '" y="' + (dimY + LABEL_DROP) +
           '" text-anchor="middle">' + esc(d.label) + '</text>');
       }
     });
@@ -176,7 +185,8 @@
     var bw = maxX - minX, bh = maxY - minY;
     if (!(bw > 0) || !(bh > 0)) return '';
 
-    var W = 600, PADL = 36, PADR = 22, TOP = 14, DIM = 34, MAXH = 420;
+    var W = 600, PADL = 36, PADR = 22, TOP = LABEL_TOP, MAXH = 420;
+    var DIM = 18 + LABEL_DROP + LABEL_ROOM; // 寸法線の位置 + ラベル + 下の余白
     var inner = W - PADL - PADR;
     // まず幅いっぱいに広げ、縦に間延びしすぎる形だけ高さで頭打ちにする
     var s = inner / bw;
@@ -223,8 +233,10 @@
     o.push('<path class="dim" fill="none" d="M ' + (X(v0[0]) + r).toFixed(1) + ' ' +
       Y(v0[1]).toFixed(1) + ' A ' + r + ' ' + r + ' 0 ' + (angleDeg > 180 ? 1 : 0) + ' 0 ' +
       (X(v0[0]) + r * cos).toFixed(1) + ' ' + (Y(v0[1]) - r * sin).toFixed(1) + '"/>');
-    o.push('<text x="' + (X(v0[0]) + (r + 13) * Math.cos(t / 2)).toFixed(1) +
-      '" y="' + (Y(v0[1]) - (r + 13) * Math.sin(t / 2) + 4).toFixed(1) +
+    // 角度が大きいと図の外へ出るので、内側に収まる位置まで戻す
+    var aLabelX = Math.min(W - PADR - 14, X(v0[0]) + (r + 13) * Math.cos(t / 2));
+    var aLabelY = Math.max(LABEL_TOP, Y(v0[1]) - (r + 13) * Math.sin(t / 2) + 4);
+    o.push('<text x="' + aLabelX.toFixed(1) + '" y="' + aLabelY.toFixed(1) +
       '" text-anchor="middle">' + fmt(angleDeg) + '°</text>');
 
     // ピッチ（1本目と2本目の直線部のあいだ）
@@ -251,14 +263,14 @@
     if (segW > 44) {
       for (var k = 1; k < count; k++) {
         var x1 = X(pipes[k - 1].vertex[0]), x2 = X(pipes[k].vertex[0]);
-        o.push('<text x="' + ((x1 + x2) / 2).toFixed(1) + '" y="' + (dimY + 18) +
+        o.push('<text x="' + ((x1 + x2) / 2).toFixed(1) + '" y="' + (dimY + LABEL_DROP) +
           '" text-anchor="middle">' + fmt(stagger) + '</text>');
       }
     } else {
       // 1つずつ書くと重なるので、まとめて「ずらし量 × 箇所数」で出す
       o.push('<text x="' +
         ((X(pipes[0].vertex[0]) + X(pipes[count - 1].vertex[0])) / 2).toFixed(1) +
-        '" y="' + (dimY + 18) + '" text-anchor="middle">' +
+        '" y="' + (dimY + LABEL_DROP) + '" text-anchor="middle">' +
         esc(fmt(stagger) + ' × ' + (count - 1)) + '</text>');
     }
 
