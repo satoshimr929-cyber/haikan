@@ -155,6 +155,59 @@
   }
 
   /**
+   * 隣り合う管の芯々ピッチを1つずつ指定して並べる。
+   * ピッチが決まっている既設配管に合わせるときや、ピッチが不揃いな盤内で使う。
+   * @param {Array<{od:number,label?:string}>} pipes
+   * @param {number[]} pitches 芯々ピッチ（pipes.length − 1 個）
+   * @param {number} margin    端あき
+   * @returns {{items:Array, pitches:number[], gaps:number[], span:number, totalWidth:number, fits:boolean}}
+   */
+  function layoutMixedPitches(pipes, pitches, margin) {
+    if (!Array.isArray(pipes) || pipes.length === 0) {
+      throw new Error('配管を1本以上追加してください');
+    }
+    req(margin, '端あき');
+    if (!Array.isArray(pitches) || pitches.length !== pipes.length - 1) {
+      throw new Error('ピッチの数が配管の本数と合っていません');
+    }
+
+    var items = [];
+    var center = margin + req(pipes[0].od, '1本目の外径') / 2;
+    var push = function (p, i, c) {
+      items.push({
+        label: p.label || String(i + 1),
+        od: p.od,
+        left: c - p.od / 2,
+        center: c,
+        right: c + p.od / 2
+      });
+    };
+    push(pipes[0], 0, center);
+
+    for (var i = 1; i < pipes.length; i++) {
+      req(pipes[i].od, (i + 1) + '本目の外径');
+      req(pitches[i - 1], i + '→' + (i + 1) + ' のピッチ');
+      center += pitches[i - 1];
+      push(pipes[i], i, center);
+    }
+
+    // 各ピッチから、その2本の管のあきを出す（負なら干渉）
+    var gaps = pitches.map(function (p, i) {
+      return p - (pipes[i].od + pipes[i + 1].od) / 2;
+    });
+
+    var span = items[items.length - 1].right - items[0].left;
+    return {
+      items: items,
+      pitches: pitches.slice(),
+      gaps: gaps,
+      span: span,
+      totalWidth: span + 2 * margin,
+      fits: gaps.every(function (g) { return g >= 0; })
+    };
+  }
+
+  /**
    * 総幅から管と管のあきを逆算する。
    * 決まった幅の中に外径の違う管を等間隔で収めたいときに使う。
    * @param {Array<{od:number,label?:string}>} pipes
@@ -209,6 +262,7 @@
     layoutEven: layoutEven,
     requiredWidth: requiredWidth,
     layoutMixed: layoutMixed,
+    layoutMixedPitches: layoutMixedPitches,
     gapForWidth: gapForWidth,
     layoutMixedInWidth: layoutMixedInWidth,
     parallelStagger: parallelStagger
