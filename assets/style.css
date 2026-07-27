@@ -31,6 +31,9 @@
 
 * { box-sizing: border-box; }
 
+/* display を明示した要素にも hidden 属性を効かせる（.pitch-band など） */
+[hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -189,7 +192,22 @@ select { appearance: none; background-image: none; }
 
 /* ---------- 混在リスト ---------- */
 .pipe-list { display: flex; flex-direction: column; gap: 8px; }
-.pipe-row { display: flex; gap: 8px; align-items: center; }
+.pipe-row { display: flex; flex-direction: column; gap: 6px; }
+.pipe-main { display: flex; gap: 8px; align-items: center; }
+
+/* 管と管のあいだに挟まる、芯々ピッチの入力欄 */
+.pitch-band {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 34px;
+  padding-left: 12px;
+  border-left: 2px dashed var(--line);
+}
+.pitch-band .pitch-label { font-size: .74rem; color: var(--fg-dim); }
+.pitch-band .unit { flex: 0 0 120px; margin-left: auto; }
+.pitch-band input { min-height: 36px; padding-top: 6px; padding-bottom: 6px; }
+
 .pipe-row .idx {
   width: 26px;
   flex: none;
@@ -199,7 +217,7 @@ select { appearance: none; background-image: none; }
 }
 .pipe-row select { flex: 1 1 auto; }
 .pipe-row .od-input { flex: 0 0 110px; }
-.pipe-row .del {
+.pipe-main .del {
   flex: none;
   width: 38px;
   min-height: 42px;
@@ -282,6 +300,7 @@ th { color: var(--fg-dim); font-weight: 600; font-size: .76rem; }
 td:first-child, th:first-child { text-align: left; }
 td { font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: var(--accent-soft); }
+td.bad-cell { color: var(--bad); font-weight: 700; }
 .series-head td {
   background: var(--bg-input);
   color: var(--fg-dim);

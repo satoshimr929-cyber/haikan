@@ -86,6 +86,39 @@ eq('同径を並べれば centerPitch と同じ',
   C.centerPitch(25.4, 25.4, 20).pitch);
 throws('空リストは例外', function () { C.layoutMixed([], 20, 30); });
 
+console.log('\nlayoutMixedPitches（ピッチを1本ずつ指定）');
+var lp = C.layoutMixedPitches(
+  [{ od: 25.4, label: 'E25' }, { od: 31.8, label: 'E31' }, { od: 50.8, label: 'E51' }],
+  [60, 100], 30);
+eq('1本目の芯 = 端あき + 半径', lp.items[0].center, 30 + 12.7);
+eq('2本目の芯 = 1本目 + 1つ目のピッチ', lp.items[1].center, 30 + 12.7 + 60);
+eq('3本目の芯 = 2本目 + 2つ目のピッチ', lp.items[2].center, 30 + 12.7 + 60 + 100);
+eq('1→2 のあき = 60 − (25.4+31.8)/2', lp.gaps[0], 60 - (25.4 + 31.8) / 2);
+eq('2→3 のあき = 100 − (31.8+50.8)/2', lp.gaps[1], 100 - (31.8 + 50.8) / 2);
+eq('総幅 = span + 端あき×2', lp.totalWidth, lp.span + 60);
+eq('span は端の管の外面〜外面', lp.span, 60 + 100 + 25.4 / 2 + 50.8 / 2);
+check('あきが確保できていれば fits=true', lp.fits === true);
+check('ピッチは入力どおり返る', lp.pitches[0] === 60 && lp.pitches[1] === 100);
+
+var same = [{ od: 25.4 }, { od: 31.8 }, { od: 50.8 }];
+eq('全ピッチを均一にすると layoutMixed と総幅が一致',
+  C.layoutMixedPitches(same, [(25.4 + 31.8) / 2 + 20, (31.8 + 50.8) / 2 + 20], 30).totalWidth,
+  C.layoutMixed(same, 20, 30).totalWidth, 1e-9);
+eq('芯位置も layoutMixed と一致',
+  C.layoutMixedPitches(same, [(25.4 + 31.8) / 2 + 20, (31.8 + 50.8) / 2 + 20], 30).items[2].center,
+  C.layoutMixed(same, 20, 30).items[2].center, 1e-9);
+
+var tight = C.layoutMixedPitches(same, [20, 100], 30);
+check('ピッチが狭すぎれば fits=false', tight.fits === false);
+check('干渉しているペアだけ あきが負', tight.gaps[0] < 0 && tight.gaps[1] > 0);
+
+eq('1本ならピッチ不要', C.layoutMixedPitches([{ od: 25.4 }], [], 30).totalWidth, 25.4 + 60);
+throws('ピッチの数が合わなければ例外',
+  function () { C.layoutMixedPitches(same, [60], 30); });
+throws('ピッチが数値でなければ例外',
+  function () { C.layoutMixedPitches(same, [60, NaN], 30); });
+throws('空リストは例外', function () { C.layoutMixedPitches([], [], 30); });
+
 console.log('\ngapForWidth / layoutMixedInWidth（総幅からの逆算）');
 var three = [{ od: 25.4 }, { od: 31.8 }, { od: 50.8 }];
 eq('総幅208・端あき30・3本 → あき20', C.gapForWidth(three, 208, 30), 20);
