@@ -195,18 +195,34 @@ select { appearance: none; background-image: none; }
 .pipe-row { display: flex; flex-direction: column; gap: 6px; }
 .pipe-main { display: flex; gap: 8px; align-items: center; }
 
-/* 管と管のあいだに挟まる、芯々ピッチの入力欄 */
+/* 管と管のあいだに挟まる、芯々ピッチ／あきの入力欄 */
 .pitch-band {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   margin-left: 34px;
   padding-left: 12px;
   border-left: 2px dashed var(--line);
 }
-.pitch-band .pitch-label { font-size: .74rem; color: var(--fg-dim); }
-.pitch-band .unit { flex: 0 0 120px; margin-left: auto; }
+.pitch-band .pitch-kind {
+  flex: 0 0 auto;
+  width: auto;
+  font-size: .8rem;
+  padding: 4px 8px;
+}
+.pitch-band .unit { flex: 0 1 100px; }
+.pitch-band .pitch-kind,
 .pitch-band input { min-height: 36px; padding-top: 6px; padding-bottom: 6px; }
+.pitch-band .pitch-calc {
+  flex: 1 1 auto;
+  text-align: right;
+  white-space: nowrap;
+  font-size: .74rem;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+.pitch-band .pitch-calc.bad-text { color: var(--bad); font-weight: 600; }
 
 .pipe-row .idx {
   width: 26px;
@@ -215,8 +231,8 @@ select { appearance: none; background-image: none; }
   font-size: .8rem;
   color: var(--fg-dim);
 }
-.pipe-row select { flex: 1 1 auto; }
-.pipe-row .od-input { flex: 0 0 110px; }
+.pipe-main .pipe-select { flex: 1 1 auto; }
+.pipe-main .od-input { flex: 0 0 110px; }
 .pipe-main .del {
   flex: none;
   width: 38px;

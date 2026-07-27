@@ -347,9 +347,13 @@
     row.className = 'pipe-row';
     row.innerHTML =
       '<div class="pitch-band" hidden>' +
-        '<span class="pitch-label">前の管からの芯々ピッチ</span>' +
-        '<div class="unit"><input type="number" class="pitch-input" step="1">' +
-        '<span>mm</span></div>' +
+        '<select class="pitch-kind" aria-label="前の管との寸法の指定方法">' +
+          '<option value="pitch">芯々ピッチ</option>' +
+          '<option value="gap">あき</option>' +
+        '</select>' +
+        '<div class="unit"><input type="number" class="pitch-input" step="1" ' +
+        'aria-label="前の管との寸法"><span>mm</span></div>' +
+        '<span class="pitch-calc"></span>' +
       '</div>' +
       '<div class="pipe-main">' +
         '<span class="idx"></span>' +
@@ -357,7 +361,7 @@
         '<input type="number" class="od-input" step="0.1" min="0" placeholder="外径 mm" hidden>' +
         '<button type="button" class="del" aria-label="削除">×</button>' +
       '</div>';
-    var sel = $('select', row);
+    var sel = $('.pipe-select', row);
     fillPipeSelect(sel, defaultName || 'E25');
     $('.del', row).addEventListener('click', function () {
       row.remove();
@@ -368,19 +372,44 @@
   }
 
   /**
-   * 2本目以降の行から芯々ピッチを読む。
-   * 未入力の欄は、あき指定モードで使っている値から求めたピッチで埋めておく
-   * （切り替えた直後から意味のある数字が並ぶようにするため）。
+   * 2本目以降の行から、前の管との寸法（芯々ピッチ または あき）を読む。
+   * - 未入力の欄は、あき指定モードで使っている値から埋めておく
+   *   （切り替えた直後から意味のある数字が並ぶようにするため）
+   * - 種類を切り替えたときは、配置が変わらないように値を換算する
    */
-  function readPitches(pipes) {
-    var gap = parseFloat(mixed.gap.value);
-    if (!isFinite(gap)) gap = 0;
+  function readSpecs(pipes) {
+    var base = parseFloat(mixed.gap.value);
+    if (!isFinite(base)) base = 0;
+
     return pipes.slice(1).map(function (p, i) {
+      var kindEl = $('.pitch-kind', p.row);
       var el = $('.pitch-input', p.row);
+      var kind = kindEl.value;
+      var half = (pipes[i].od + p.od) / 2;
+
       if (el.value === '') {
-        el.value = fmt((pipes[i].od + p.od) / 2 + gap);
+        el.value = fmt(kind === 'gap' ? base : half + base);
+      } else if (kindEl.dataset.prevKind && kindEl.dataset.prevKind !== kind) {
+        // ピッチ ⇄ あき の切り替えで配置が飛ばないよう、半径ぶんを足し引きする
+        var v = parseFloat(el.value);
+        if (isFinite(v)) el.value = fmt(kind === 'gap' ? v - half : v + half);
       }
-      return parseFloat(el.value);
+      kindEl.dataset.prevKind = kind;
+
+      return { kind: kind, value: parseFloat(el.value) };
+    });
+  }
+
+  /** ピッチ欄の横に、指定していないほうの寸法を出す */
+  function showDerived(pipes, out) {
+    pipes.slice(1).forEach(function (p, i) {
+      var kindEl = $('.pitch-kind', p.row);
+      var el = $('.pitch-calc', p.row);
+      var other = kindEl.value === 'gap'
+        ? '芯々 ' + fmt(out.pitches[i])
+        : 'あき ' + fmt(out.gaps[i]);
+      el.textContent = '＝ ' + other + ' mm';
+      el.classList.toggle('bad-text', out.gaps[i] < 0);
     });
   }
 
@@ -401,7 +430,7 @@
     var pipes = [];
     var incomplete = false;
     rows.forEach(function (r) {
-      var p = readPipe($('select', r), $('.od-input', r));
+      var p = readPipe($('.pipe-select', r), $('.od-input', r));
       if (p) { p.row = r; pipes.push(p); } else incomplete = true;
     });
 
@@ -413,11 +442,11 @@
     }
 
     var margin = parseFloat(mixed.margin.value);
-    var gap, out, pitches = null;
+    var gap, out;
     try {
       if (byEach) {
-        pitches = readPitches(pipes);
-        out = C.layoutMixedPitches(pipes, pitches, margin);
+        out = C.layoutMixedSpecs(pipes, readSpecs(pipes), margin);
+        showDerived(pipes, out);
       } else if (byWidth) {
         out = C.layoutMixedInWidth(pipes, parseFloat(mixed.width.value), margin);
         gap = out.gap;
