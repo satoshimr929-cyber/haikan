@@ -142,6 +142,130 @@
     return out.join('');
   }
 
+  /**
+   * 並行配管を同じ角度で曲げたところを真上から見た図。
+   * 曲げの内側になる管ほど曲げ位置が手前になり、そのずれが stagger。
+   * 1本目を内側（図の上）に置き、外側へ向かって順に曲げ位置をずらして描く。
+   */
+  function staggerSVG(count, pitch, angleDeg, stagger) {
+    if (!(count >= 2) || !(pitch > 0) || !isFinite(stagger)) return '';
+
+    var t = angleDeg * Math.PI / 180;
+    var cos = Math.cos(t), sin = Math.sin(t);
+    var leadIn = Math.max(pitch * 1.4, stagger * 1.2, 40); // 曲げ手前の直線部
+    var leadOut = Math.max(pitch * 1.6, 60);               // 曲げた先の直線部
+
+    // モデル座標（mm・y は下向き）で各管の 始点／曲げ位置／終点 を出す
+    var pipes = [];
+    for (var i = 0; i < count; i++) {
+      var vxi = leadIn + i * stagger, vyi = i * pitch;
+      pipes.push({
+        start: [0, vyi],
+        vertex: [vxi, vyi],
+        end: [vxi + leadOut * cos, vyi - leadOut * sin]
+      });
+    }
+
+    // 角度によっては曲げた先が左へ戻るので、実際の範囲から囲みを取る
+    var xs = [], ys = [];
+    pipes.forEach(function (p) {
+      [p.start, p.vertex, p.end].forEach(function (q) { xs.push(q[0]); ys.push(q[1]); });
+    });
+    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    var bw = maxX - minX, bh = maxY - minY;
+    if (!(bw > 0) || !(bh > 0)) return '';
+
+    var W = 600, PADL = 36, PADR = 22, TOP = 14, DIM = 34, MAXH = 420;
+    var inner = W - PADL - PADR;
+    // まず幅いっぱいに広げ、縦に間延びしすぎる形だけ高さで頭打ちにする
+    var s = inner / bw;
+    if (TOP + bh * s + DIM > MAXH) s = (MAXH - TOP - DIM) / bh;
+    var offX = PADL + (inner - bw * s) / 2;
+    var X = function (x) { return offX + (x - minX) * s; };
+    var Y = function (y) { return TOP + (y - minY) * s; };
+
+    var drawH = bh * s;
+    var dimY = TOP + drawH + 18;
+    var H = TOP + drawH + DIM;
+    var o = [];
+
+    o.push('<svg viewBox="0 0 ' + W + ' ' + Math.round(H) +
+      '" role="img" aria-label="並行配管の曲げ位置をずらした図">');
+
+    // 曲げ位置を結ぶ線。まっすぐ並ばずに斜めに流れることが見てとれる
+    o.push('<line class="ghost" x1="' + X(pipes[0].vertex[0]).toFixed(1) +
+      '" y1="' + Y(pipes[0].vertex[1]).toFixed(1) +
+      '" x2="' + X(pipes[count - 1].vertex[0]).toFixed(1) +
+      '" y2="' + Y(pipes[count - 1].vertex[1]).toFixed(1) + '"/>');
+
+    pipes.forEach(function (p, i) {
+      o.push('<polyline class="pipe-line" points="' +
+        [p.start, p.vertex, p.end].map(function (q) {
+          return X(q[0]).toFixed(1) + ',' + Y(q[1]).toFixed(1);
+        }).join(' ') + '"/>');
+      o.push('<circle class="vertex" cx="' + X(p.vertex[0]).toFixed(1) +
+        '" cy="' + Y(p.vertex[1]).toFixed(1) + '" r="3"/>');
+      o.push('<text class="strong" x="' + (X(p.start[0]) - 6).toFixed(1) +
+        '" y="' + (Y(p.start[1]) + 4).toFixed(1) + '" text-anchor="end">' +
+        (i + 1) + '</text>');
+      // 曲げ位置から下の寸法線へ落とす引き出し線
+      o.push('<line class="cl" x1="' + X(p.vertex[0]).toFixed(1) +
+        '" y1="' + Y(p.vertex[1]).toFixed(1) +
+        '" x2="' + X(p.vertex[0]).toFixed(1) + '" y2="' + (dimY + 6) + '"/>');
+    });
+
+    // 曲げずにまっすぐ進んだ場合の線と、そこからの振れ角
+    var v0 = pipes[0].vertex;
+    var r = 26;
+    o.push('<line class="ghost" x1="' + X(v0[0]).toFixed(1) + '" y1="' + Y(v0[1]).toFixed(1) +
+      '" x2="' + (X(v0[0]) + r * 1.7).toFixed(1) + '" y2="' + Y(v0[1]).toFixed(1) + '"/>');
+    o.push('<path class="dim" fill="none" d="M ' + (X(v0[0]) + r).toFixed(1) + ' ' +
+      Y(v0[1]).toFixed(1) + ' A ' + r + ' ' + r + ' 0 ' + (angleDeg > 180 ? 1 : 0) + ' 0 ' +
+      (X(v0[0]) + r * cos).toFixed(1) + ' ' + (Y(v0[1]) - r * sin).toFixed(1) + '"/>');
+    o.push('<text x="' + (X(v0[0]) + (r + 13) * Math.cos(t / 2)).toFixed(1) +
+      '" y="' + (Y(v0[1]) - (r + 13) * Math.sin(t / 2) + 4).toFixed(1) +
+      '" text-anchor="middle">' + fmt(angleDeg) + '°</text>');
+
+    // ピッチ（1本目と2本目の直線部のあいだ）
+    var px = X(0) + Math.min(26, leadIn * s * 0.4);
+    o.push('<line class="dim" x1="' + px.toFixed(1) + '" y1="' + Y(0).toFixed(1) +
+      '" x2="' + px.toFixed(1) + '" y2="' + Y(pitch).toFixed(1) + '"/>');
+    [0, pitch].forEach(function (y) {
+      o.push('<line class="dim" x1="' + (px - 4).toFixed(1) + '" y1="' + Y(y).toFixed(1) +
+        '" x2="' + (px + 4).toFixed(1) + '" y2="' + Y(y).toFixed(1) + '"/>');
+    });
+    if (pitch * s > 34) {
+      o.push('<text x="' + (px + 6).toFixed(1) + '" y="' + (Y(pitch / 2) + 4).toFixed(1) +
+        '">' + fmt(pitch) + '</text>');
+    }
+
+    // 下側：曲げ位置のずれ
+    o.push('<line class="dim" x1="' + X(pipes[0].vertex[0]).toFixed(1) + '" y1="' + dimY +
+      '" x2="' + X(pipes[count - 1].vertex[0]).toFixed(1) + '" y2="' + dimY + '"/>');
+    pipes.forEach(function (p) {
+      o.push('<line class="dim" x1="' + X(p.vertex[0]).toFixed(1) + '" y1="' + (dimY - 5) +
+        '" x2="' + X(p.vertex[0]).toFixed(1) + '" y2="' + (dimY + 5) + '"/>');
+    });
+    var segW = (X(pipes[count - 1].vertex[0]) - X(pipes[0].vertex[0])) / (count - 1);
+    if (segW > 44) {
+      for (var k = 1; k < count; k++) {
+        var x1 = X(pipes[k - 1].vertex[0]), x2 = X(pipes[k].vertex[0]);
+        o.push('<text x="' + ((x1 + x2) / 2).toFixed(1) + '" y="' + (dimY + 18) +
+          '" text-anchor="middle">' + fmt(stagger) + '</text>');
+      }
+    } else {
+      // 1つずつ書くと重なるので、まとめて「ずらし量 × 箇所数」で出す
+      o.push('<text x="' +
+        ((X(pipes[0].vertex[0]) + X(pipes[count - 1].vertex[0])) / 2).toFixed(1) +
+        '" y="' + (dimY + 18) + '" text-anchor="middle">' +
+        esc(fmt(stagger) + ' × ' + (count - 1)) + '</text>');
+    }
+
+    o.push('</svg>');
+    return o.join('');
+  }
+
   /* ------------------------------------------------- モード1：2本の芯々 */
 
   var two = {
@@ -535,7 +659,8 @@
 
   var stag = {
     pitch: $('#stag-pitch'), angle: $('#stag-angle'), count: $('#stag-count'),
-    result: $('#stag-result'), marks: $('#stag-marks'), quick: $('#stag-quick')
+    result: $('#stag-result'), figure: $('#stag-figure'),
+    marks: $('#stag-marks'), quick: $('#stag-quick')
   };
 
   function renderStagger() {
@@ -547,7 +672,7 @@
       r = C.parallelStagger(pitch, angle);
     } catch (e) {
       stag.result.innerHTML = msg(e.message, 'warn');
-      stag.marks.innerHTML = '';
+      stag.figure.innerHTML = ''; stag.marks.innerHTML = '';
       return;
     }
     if (!(count >= 2)) count = 2;
@@ -561,6 +686,8 @@
     ]);
     html += msg('曲げの内側になる管ほど曲げ位置が手前になります。1本目を基準に、外側へ向かって順に足していってください。', '');
     stag.result.innerHTML = html;
+
+    stag.figure.innerHTML = staggerSVG(count, pitch, angle, r.stagger);
 
     var rows = '';
     for (var i = 0; i < count; i++) {

@@ -180,6 +180,21 @@ eq('60°は 75×tan30° ≒ 43.30', C.parallelStagger(75, 60).stagger, 75 / Math
 throws('0°は例外', function () { C.parallelStagger(75, 0); });
 throws('180°は例外', function () { C.parallelStagger(75, 180); });
 
+// このずらし量を使えば曲げたあともピッチが保たれる、というのが計算の主旨。
+// 曲げ位置を st ずらした2本の管の、曲げた先どうしの垂直距離を実際に出して確かめる。
+// 進入方向を (1,0)、曲げ後を (cosθ, sinθ) とすると、法線は (-sinθ, cosθ)。
+// 2本の曲げ位置の差ベクトル (st, -p) を法線に射影した長さが曲げ後のピッチになる。
+function pitchAfterBend(pitch, angleDeg, stagger) {
+  var t = angleDeg * Math.PI / 180;
+  return Math.abs(stagger * -Math.sin(t) + -pitch * Math.cos(t));
+}
+[90, 45, 30, 22.5, 60, 120, 5].forEach(function (a) {
+  var st = C.parallelStagger(75, a).stagger;
+  eq(a + '°：ずらした後もピッチ75が保たれる', pitchAfterBend(75, a, st), 75, 1e-9);
+});
+check('ずらさないとピッチが変わってしまう',
+  Math.abs(pitchAfterBend(75, 45, 0) - 75) > 1);
+
 console.log('\n寸法データ');
 var sizes = D.allSizes();
 check('サイズが1件以上ある', sizes.length > 0);
