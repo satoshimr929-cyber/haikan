@@ -119,6 +119,43 @@ throws('ピッチが数値でなければ例外',
   function () { C.layoutMixedPitches(same, [60, NaN], 30); });
 throws('空リストは例外', function () { C.layoutMixedPitches([], [], 30); });
 
+console.log('\nlayoutMixedSpecs（ピッチ／あきを混ぜて指定）');
+var three3 = [{ od: 25.4 }, { od: 31.8 }, { od: 50.8 }];
+var half12 = (25.4 + 31.8) / 2;
+var half23 = (31.8 + 50.8) / 2;
+
+var sp = C.layoutMixedSpecs(three3,
+  [{ kind: 'pitch', value: 60 }, { kind: 'gap', value: 20 }], 30);
+eq('ピッチ指定はそのまま使われる', sp.pitches[0], 60);
+eq('あき指定は 芯々 = あき + 外径の平均 に直る', sp.pitches[1], 20 + half23);
+eq('ピッチ指定側のあきも出る', sp.gaps[0], 60 - half12);
+eq('あき指定側のあきは入力どおり', sp.gaps[1], 20);
+eq('2本目の芯', sp.items[1].center, 30 + 12.7 + 60);
+eq('3本目の芯', sp.items[2].center, 30 + 12.7 + 60 + 20 + half23);
+
+eq('全部ピッチ指定なら layoutMixedPitches と一致',
+  C.layoutMixedSpecs(three3, [{ kind: 'pitch', value: 60 }, { kind: 'pitch', value: 100 }], 30).totalWidth,
+  C.layoutMixedPitches(three3, [60, 100], 30).totalWidth, 1e-9);
+eq('全部あき指定で同じ値なら layoutMixed と一致',
+  C.layoutMixedSpecs(three3, [{ kind: 'gap', value: 20 }, { kind: 'gap', value: 20 }], 30).totalWidth,
+  C.layoutMixed(three3, 20, 30).totalWidth, 1e-9);
+eq('ピッチ指定とあき指定は換算すれば同じ配置',
+  C.layoutMixedSpecs(three3, [{ kind: 'gap', value: 20 }, { kind: 'gap', value: 20 }], 30).items[2].center,
+  C.layoutMixedSpecs(three3,
+    [{ kind: 'pitch', value: 20 + half12 }, { kind: 'pitch', value: 20 + half23 }], 30).items[2].center,
+  1e-9);
+
+check('kind の指定がなければピッチ扱い',
+  near(C.layoutMixedSpecs(three3, [{ value: 60 }, { value: 100 }], 30).pitches[0], 60, 1e-9));
+check('あき指定でマイナスにすれば干渉と判定',
+  C.layoutMixedSpecs(three3, [{ kind: 'gap', value: -1 }, { kind: 'gap', value: 20 }], 30).fits === false);
+eq('1本なら指定不要', C.layoutMixedSpecs([{ od: 25.4 }], [], 30).totalWidth, 25.4 + 60);
+throws('指定の数が合わなければ例外',
+  function () { C.layoutMixedSpecs(three3, [{ kind: 'gap', value: 20 }], 30); });
+throws('値が数値でなければ例外',
+  function () { C.layoutMixedSpecs(three3, [{ kind: 'gap', value: 20 }, { kind: 'gap' }], 30); });
+throws('空リストは例外', function () { C.layoutMixedSpecs([], [], 30); });
+
 console.log('\ngapForWidth / layoutMixedInWidth（総幅からの逆算）');
 var three = [{ od: 25.4 }, { od: 31.8 }, { od: 50.8 }];
 eq('総幅208・端あき30・3本 → あき20', C.gapForWidth(three, 208, 30), 20);

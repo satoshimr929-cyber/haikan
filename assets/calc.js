@@ -208,6 +208,35 @@
   }
 
   /**
+   * 隣り合う管ごとに「芯々ピッチ」か「あき」かを選んで指定して並べる。
+   * 図面で芯々が決まっている箇所と、あきだけ決まっている箇所を混ぜて入力できる。
+   * @param {Array<{od:number,label?:string}>} pipes
+   * @param {Array<{kind:'pitch'|'gap', value:number}>} specs 指定（pipes.length − 1 個）
+   * @param {number} margin 端あき
+   * @returns layoutMixedPitches と同じ形
+   */
+  function layoutMixedSpecs(pipes, specs, margin) {
+    if (!Array.isArray(pipes) || pipes.length === 0) {
+      throw new Error('配管を1本以上追加してください');
+    }
+    if (!Array.isArray(specs) || specs.length !== pipes.length - 1) {
+      throw new Error('指定の数が配管の本数と合っていません');
+    }
+
+    var pitches = specs.map(function (s, i) {
+      var kind = s && s.kind === 'gap' ? 'gap' : 'pitch';
+      var label = (i + 1) + '→' + (i + 2) + ' の' + (kind === 'gap' ? 'あき' : 'ピッチ');
+      var v = req(s && s.value, label);
+      if (kind !== 'gap') return v;
+      // あき指定なら、両側の半径ぶんを足して芯々ピッチに直す
+      return v + (req(pipes[i].od, (i + 1) + '本目の外径') +
+        req(pipes[i + 1].od, (i + 2) + '本目の外径')) / 2;
+    });
+
+    return layoutMixedPitches(pipes, pitches, margin);
+  }
+
+  /**
    * 総幅から管と管のあきを逆算する。
    * 決まった幅の中に外径の違う管を等間隔で収めたいときに使う。
    * @param {Array<{od:number,label?:string}>} pipes
@@ -263,6 +292,7 @@
     requiredWidth: requiredWidth,
     layoutMixed: layoutMixed,
     layoutMixedPitches: layoutMixedPitches,
+    layoutMixedSpecs: layoutMixedSpecs,
     gapForWidth: gapForWidth,
     layoutMixedInWidth: layoutMixedInWidth,
     parallelStagger: parallelStagger
