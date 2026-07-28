@@ -471,13 +471,20 @@
    * @param {number[]} [extra]     個別に足す接続点
    * @returns {number[]} 昇順・重複なし。両端（0 と length）は含まない
    */
-  function jointPositions(length, stockLength, firstJoint, extra) {
+  function jointPositions(length, stockLength, firstJoint, extra, mode) {
     req(length, '配管の全長');
     var out = [];
 
     if (isNum(stockLength) && stockLength > 0) {
-      var first = isNum(firstJoint) && firstJoint > 0 ? firstJoint : stockLength;
-      for (var x = first; x < length; x += stockLength) out.push(x);
+      if (mode === 'even') {
+        // 必要な本数で等分する。2本なら継ぎがちょうど真ん中に来る
+        var n = Math.ceil(length / stockLength - 1e-9);
+        for (var k = 1; k < n; k++) out.push(length * k / n);
+      } else {
+        // 端から定尺で継いでいき、最後が半端になる
+        var first = isNum(firstJoint) && firstJoint > 0 ? firstJoint : stockLength;
+        for (var x = first; x < length; x += stockLength) out.push(x);
+      }
     }
     (extra || []).forEach(function (v, i) {
       out.push(req(v, (i + 1) + '個目の接続点'));
@@ -487,6 +494,64 @@
       .filter(function (v) { return v > 0 && v < length; })
       .sort(function (a, b) { return a - b; })
       .filter(function (v, i, arr) { return i === 0 || Math.abs(v - arr[i - 1]) > 1e-6; });
+  }
+
+  /**
+   * 接続点で区切ったときの、管1本ずつの長さ。
+   * @returns {number[]} 端から順。接続点がなければ全長そのもの1本
+   */
+  function pieceLengths(length, joints) {
+    req(length, '配管の全長');
+    var out = [], prev = 0;
+    (joints || []).forEach(function (j) { out.push(j - prev); prev = j; });
+    out.push(length - prev);
+    return out;
+  }
+
+  /**
+   * 切り出したい長さを定尺に詰めて、必要な本数と端材を出す。
+   * 長いものから順に、入るところへ入れていく（first-fit decreasing）。
+   * @param {number[]} pieces 切り出す長さ
+   * @param {number} stockLength 定尺
+   * @returns {{stockCount, bins:Array, totalWaste, longestOffcut}}
+   *   bins の要素は {cuts:number[], used:number, waste:number}
+   */
+  function cutList(pieces, stockLength) {
+    req(stockLength, '定尺');
+    if (stockLength <= 0) throw new Error('定尺は0より大きい値を入力してください');
+
+    var sorted = (pieces || []).map(function (v, i) {
+      return req(v, (i + 1) + '本目の長さ');
+    }).filter(function (v) { return v > 1e-9; })
+      .sort(function (a, b) { return b - a; });
+
+    var tooLong = sorted.filter(function (v) { return v > stockLength + 1e-9; });
+    if (tooLong.length) {
+      throw new Error('定尺（' + stockLength + 'mm）より長い管は切り出せません');
+    }
+
+    var bins = [];
+    sorted.forEach(function (v) {
+      var bin = null;
+      for (var i = 0; i < bins.length; i++) {
+        if (bins[i].waste >= v - 1e-9) { bin = bins[i]; break; }
+      }
+      if (!bin) {
+        bin = { cuts: [], used: 0, waste: stockLength };
+        bins.push(bin);
+      }
+      bin.cuts.push(v);
+      bin.used += v;
+      bin.waste = stockLength - bin.used;
+    });
+
+    return {
+      stockCount: bins.length,
+      bins: bins,
+      totalWaste: bins.reduce(function (a, b) { return a + b.waste; }, 0),
+      longestOffcut: bins.length
+        ? Math.max.apply(null, bins.map(function (b) { return b.waste; })) : 0
+    };
   }
 
   /** 位置 x が、どれかの接続点と clear 未満まで近づいているか */
@@ -706,6 +771,8 @@
     saddle4: saddle4,
     supportLayout: supportLayout,
     jointPositions: jointPositions,
+    pieceLengths: pieceLengths,
+    cutList: cutList,
     supportPlan: supportPlan
   };
 

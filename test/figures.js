@@ -88,7 +88,14 @@ var CASES = [
       'sup-coupling': '60', 'sup-saddle': '25', 'sup-atjoint': 'on' },
     { 'sup-extra': '3000, 3100' },                                  // 接続点が近い
     { 'sup-length': '20000', 'sup-extra': '', 'sup-stock': '4000' }, // 両側支持で長尺
-    { 'sup-length': '6000', 'sup-stock': '', 'sup-extra': '2000, 4000', 'sup-atjoint': 'off' }
+    { 'sup-length': '6000', 'sup-stock': '', 'sup-extra': '2000, 4000', 'sup-atjoint': 'off' },
+    // 継ぎ方（定尺＋半端／均等＝センター継ぎ）
+    { 'sup-length': '6000', 'sup-stock': '3660', 'sup-extra': '', 'sup-atjoint': 'auto',
+      'sup-joint-mode': 'stock' },
+    { 'sup-joint-mode': 'even' },
+    { 'sup-length': '10000', 'sup-joint-mode': 'stock' },
+    { 'sup-joint-mode': 'even' },
+    { 'sup-length': '30000', 'sup-joint-mode': 'even' }
   ] },
   { tab: 'bend', mode: 'offset', fig: '#off-figure', sets: [
     { 'off-rise': '100', 'off-angle': '30' }, { 'off-angle': '45' },
