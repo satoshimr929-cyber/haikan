@@ -457,6 +457,42 @@
     };
   }
 
+  /**
+   * ピッチが管ごとに違う並びを、同じ角度で曲げるときのずらし量。
+   * サイズ混在の割り付けをそのまま渡せる。
+   * @param {number[]} pitches 手前の芯々ピッチ（管の数 − 1 個）
+   * @param {number} angleDeg  曲げ角度
+   * @param {number|number[]} [after] 曲げた先のピッチ。
+   *   数値なら全ペアをその値に揃える（ばらばらの並びを盤で揃えるとき）。
+   *   配列ならペアごと。省略すれば手前と同じ。
+   * @returns {{pairs:Array, offsets:number[], total:number}}
+   *   offsets は1本目を0としたときの各管の曲げ位置のずれ
+   */
+  function parallelStaggerList(pitches, angleDeg, after) {
+    if (!Array.isArray(pitches) || !pitches.length) {
+      throw new Error('ピッチを1つ以上渡してください');
+    }
+    if (Array.isArray(after) && after.length !== pitches.length) {
+      throw new Error('曲げた先のピッチの数が合っていません');
+    }
+
+    var pairs = pitches.map(function (p, i) {
+      return parallelStagger(p, angleDeg, Array.isArray(after) ? after[i] : after);
+    });
+
+    var offsets = [0];
+    pairs.forEach(function (pr) {
+      offsets.push(offsets[offsets.length - 1] + pr.stagger);
+    });
+
+    return {
+      pairs: pairs,
+      offsets: offsets,
+      angle: angleDeg,
+      total: offsets[offsets.length - 1]
+    };
+  }
+
   /* ------------------------------------------ 管の接続点（カップリング）
    * 支持点との関係は材質で規定が違います（公共建築工事標準仕様書 電気設備工事編）。
    *   金属管   : 管相互の接続点は支持の対象に明記なし → サドルと当たらなければよい
@@ -764,6 +800,7 @@
     gapForWidth: gapForWidth,
     layoutMixedInWidth: layoutMixedInWidth,
     parallelStagger: parallelStagger,
+    parallelStaggerList: parallelStaggerList,
     offset: offset,
     bendMarks: bendMarks,
     minBendRadius: minBendRadius,

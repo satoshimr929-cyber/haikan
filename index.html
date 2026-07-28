@@ -177,6 +177,7 @@
         <div class="row-actions">
           <button type="button" class="btn" id="mixed-add">＋ 追加</button>
           <button type="button" class="btn btn-quiet" id="mixed-clear">クリア</button>
+          <button type="button" class="btn btn-quiet" id="mixed-to-stagger">曲げのずらしへ送る</button>
         </div>
       </div>
 
@@ -194,29 +195,41 @@
         並んだ配管を同じ角度で曲げるとき、隣り合う管の曲げ位置をどれだけ前後にずらすかを出します。
         曲げた先のピッチを手前と変えることもできます（ラックから盤へ入るときなど）。
         ずらし量 =（曲げた先のピッチ − 手前のピッチ × cos角度）÷ sin角度。
+        サイズ混在で並べた配管は、そちらの「曲げのずらしへ送る」で持ち込めます
+        （径が違えばピッチも変わるので、ペアごとに計算します）。
       </p>
 
-      <div class="field-row">
+      <div class="field">
+        <label for="stag-source">手前のピッチ</label>
+        <select id="stag-source">
+          <option value="uniform">一定のピッチを入力</option>
+          <option value="mixed">サイズ混在から取り込んだ並び</option>
+        </select>
+      </div>
+
+      <div class="msg" id="stag-imported" hidden></div>
+
+      <div class="field-row" id="stag-uniform-row">
         <div class="field">
           <label for="stag-pitch">手前の芯々ピッチ</label>
           <div class="unit"><input type="number" id="stag-pitch" step="1" value="75"><span>mm</span></div>
         </div>
+        <div class="field">
+          <label for="stag-count">本数</label>
+          <div class="unit"><input type="number" id="stag-count" step="1" min="2" value="4"><span>本</span></div>
+        </div>
+      </div>
+
+      <div class="field-row">
         <div class="field">
           <label for="stag-pitch2">曲げた先の芯々ピッチ</label>
           <div class="unit">
             <input type="number" id="stag-pitch2" step="1" placeholder="手前と同じ"><span>mm</span>
           </div>
         </div>
-      </div>
-
-      <div class="field-row">
         <div class="field">
           <label for="stag-angle">曲げ角度</label>
           <div class="unit"><input type="number" id="stag-angle" step="1" value="90"><span>度</span></div>
-        </div>
-        <div class="field">
-          <label for="stag-count">本数</label>
-          <div class="unit"><input type="number" id="stag-count" step="1" min="2" value="4"><span>本</span></div>
         </div>
       </div>
 

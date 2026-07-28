@@ -70,7 +70,12 @@ var CASES = [
     { 'stag-angle': '90', 'stag-count': '20' },
     { 'stag-pitch': '75', 'stag-pitch2': '150', 'stag-angle': '45', 'stag-count': '4' },
     { 'stag-pitch2': '30' }, { 'stag-pitch': '60', 'stag-pitch2': '200', 'stag-angle': '10' },
-    { 'stag-pitch': '200', 'stag-pitch2': '20', 'stag-angle': '60', 'stag-count': '6' }
+    { 'stag-pitch': '200', 'stag-pitch2': '20', 'stag-angle': '60', 'stag-count': '6' },
+    // サイズ混在から取り込んだ、ピッチがばらばらの並び
+    { 'stag-pitch2': '', 'stag-angle': '90', '@import': '#mixed-to-stagger' },
+    { 'stag-angle': '45' }, { 'stag-angle': '22.5' },
+    { 'stag-pitch2': '50' }, { 'stag-pitch2': '200' },
+    { 'stag-source': 'uniform', 'stag-pitch2': '' }
   ] },
   { tab: 'pitch', mode: 'support', fig: '#sup-figure', sets: [
     { 'sup-length': '5000', 'sup-stock': '', 'sup-extra': '' },
@@ -135,6 +140,14 @@ var CASES = [
       await page.click('[data-mode="' + cs.mode + '"]');
       for (var set of cs.sets) {
         for (var id of Object.keys(set)) {
+          // "@" で始まるキーはボタンを押す指示（値の入力ではない）。
+          // 別モードのパネルにあって隠れていることがあるので、直接発火させる。
+          if (id[0] === '@') {
+            await page.evaluate(function (sel) {
+              document.querySelector(sel).click();
+            }, set[id]);
+            continue;
+          }
           var el = await page.$('#' + id);
           var tag = await el.evaluate(function (n) { return n.tagName; });
           if (tag === 'SELECT') await page.selectOption('#' + id, set[id]);

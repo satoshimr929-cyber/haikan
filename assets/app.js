@@ -269,8 +269,12 @@
     gap: $('#mixed-gap'), width: $('#mixed-width'), margin: $('#mixed-margin'),
     gapField: $('#mixed-gap-field'), widthField: $('#mixed-width-field'),
     list: $('#mixed-list'), add: $('#mixed-add'), clear: $('#mixed-clear'),
+    toStagger: $('#mixed-to-stagger'),
     result: $('#mixed-result'), figure: $('#mixed-figure'), marks: $('#mixed-marks')
   };
+
+  // 混在モードの最新の並び。「曲げのずらしへ送る」から読む
+  var mixedLatest = null;
 
   function mixedAddRow(defaultName) {
     var row = document.createElement('div');
@@ -377,6 +381,8 @@
       mixed.result.innerHTML = msg(
         rows.length ? '外径を入力してください' : '「＋ 追加」で配管を並べてください', 'warn');
       mixed.figure.innerHTML = ''; mixed.marks.innerHTML = '';
+      mixedLatest = null;
+      mixed.toStagger.disabled = true;
       return;
     }
 
@@ -396,6 +402,8 @@
     } catch (e) {
       mixed.result.innerHTML = msg(e.message, 'warn');
       mixed.figure.innerHTML = ''; mixed.marks.innerHTML = '';
+      mixedLatest = null;
+      mixed.toStagger.disabled = true;
       return;
     }
 
@@ -435,6 +443,13 @@
     }
     mixed.result.innerHTML = html;
 
+    // 「曲げのずらしへ送る」で使うので、いまの並びを覚えておく
+    mixedLatest = {
+      labels: out.items.map(function (it) { return it.label; }),
+      pitches: out.pitches.slice()
+    };
+    mixed.toStagger.disabled = out.pitches.length === 0;
+
     var items = out.items.map(function (it) {
       return { center: it.center, od: it.od, label: it.label };
     });
@@ -467,63 +482,110 @@
   var stag = {
     pitch: $('#stag-pitch'), pitch2: $('#stag-pitch2'),
     angle: $('#stag-angle'), count: $('#stag-count'),
+    source: $('#stag-source'), uniformRow: $('#stag-uniform-row'),
+    imported: $('#stag-imported'),
     result: $('#stag-result'), figure: $('#stag-figure'),
     marks: $('#stag-marks'), quick: $('#stag-quick')
   };
 
+  // サイズ混在から持ち込んだ並び（{labels:[], pitches:[]}）。無ければ null
+  var staggerImport = null;
+
   function renderStagger() {
-    var pitch = parseFloat(stag.pitch.value);
+    // サイズ混在から持ち込んだ並びが無ければ、取り込みは選べない
+    var useMixed = stag.source.value === 'mixed' && staggerImport;
+    if (stag.source.value === 'mixed' && !staggerImport) stag.source.value = 'uniform';
+    stag.uniformRow.hidden = useMixed;
+    stag.imported.hidden = !useMixed;
+
     var angle = parseFloat(stag.angle.value);
-    var count = parseInt(stag.count.value, 10);
-    // 空欄なら「手前と同じ」。プレースホルダにも手前の値を出しておく
-    stag.pitch2.placeholder = isFinite(pitch) ? '手前と同じ（' + fmt(pitch) + '）' : '手前と同じ';
     var after = stag.pitch2.value === '' ? undefined : parseFloat(stag.pitch2.value);
+    var pitches, labels;
+
+    if (useMixed) {
+      pitches = staggerImport.pitches;
+      labels = staggerImport.labels;
+      stag.pitch2.placeholder = '手前と同じ（ばらばらのまま）';
+      stag.imported.textContent = 'サイズ混在から ' + labels.length + ' 本を取り込みました（' +
+        labels.join(' / ') + '）。ピッチは ' + pitches.map(fmt).join(' / ') + ' mm です。';
+    } else {
+      var pitch = parseFloat(stag.pitch.value);
+      var count = parseInt(stag.count.value, 10);
+      if (!(count >= 2)) count = 2;
+      stag.pitch2.placeholder = isFinite(pitch)
+        ? '手前と同じ（' + fmt(pitch) + '）' : '手前と同じ';
+      pitches = [];
+      for (var k = 0; k < count - 1; k++) pitches.push(pitch);
+      labels = null;
+    }
 
     var r;
     try {
-      r = C.parallelStagger(pitch, angle, after);
+      r = C.parallelStaggerList(pitches, angle, after);
     } catch (e) {
       stag.result.innerHTML = msg(e.message, 'warn');
       stag.figure.innerHTML = ''; stag.marks.innerHTML = '';
       return;
     }
-    if (!(count >= 2)) count = 2;
-    var same = r.pitchAfter === r.pitch;
 
-    var html = big('隣の管とのずらし量', fmt(r.stagger), 'mm');
+    var count2 = r.offsets.length;
+    var shifts = r.pairs.map(function (p) { return p.stagger; });
+    var uniform = shifts.every(function (v) { return Math.abs(v - shifts[0]) < 1e-6; });
+    var sameP = r.pairs.every(function (p) { return p.pitchAfter === p.pitch; });
+
+    var html = uniform
+      ? big('隣の管とのずらし量', fmt(shifts[0]), 'mm')
+      : big('端から端のずらし合計', fmt(r.total), 'mm');
+
     html += kv([
-      ['手前のピッチ', fmt(r.pitch) + ' mm'],
-      ['曲げた先のピッチ', fmt(r.pitchAfter) + ' mm' + (same ? '（手前と同じ）' : '')],
+      ['手前のピッチ', uniform && !useMixed ? fmt(pitches[0]) + ' mm'
+        : pitches.map(fmt).join(' / ') + ' mm'],
+      ['曲げた先のピッチ', sameP ? '手前と同じ'
+        : fmt(r.pairs[0].pitchAfter) + ' mm' + (r.pairs.length > 1 ? '（全ペア）' : '')],
       ['曲げ角度', fmt(angle) + ' °'],
-      ['本数', count + ' 本'],
-      ['端から端の合計', fmt(r.stagger * (count - 1)) + ' mm']
+      ['本数', count2 + ' 本'],
+      ['端から端の合計', fmt(r.total) + ' mm']
     ]);
 
-    if (r.stagger > 0) {
+    var minShift = Math.min.apply(null, shifts);
+    var maxShift = Math.max.apply(null, shifts);
+    if (minShift > 0) {
       html += msg('曲げの内側になる管ほど曲げ位置が手前になります。' +
         '1本目を基準に、外側へ向かって順に足していってください。', '');
-    } else if (r.stagger < 0) {
+    } else if (maxShift < 0) {
       html += msg('ずらし量がマイナスです。曲げの外側になる管のほうが手前で曲がります。' +
         '1本目を基準に、外側へ向かって順に手前へ戻してください。', 'warn');
-    } else {
+    } else if (minShift === 0 && maxShift === 0) {
       html += msg('ずらし量が 0 です。どの管も同じ位置で曲げます。', '');
+    } else {
+      html += msg('ペアによってずらす向きが違います。表の符号どおりに、' +
+        'プラスは先へ、マイナスは手前へずらしてください。', 'warn');
     }
-    if (!same) {
+    if (!sameP) {
       html += msg('曲げ角度はどの管も ' + fmt(angle) + '° のままで、' +
-        '曲げ位置のずらし方だけでピッチを ' + fmt(r.pitch) + 'mm から ' +
-        fmt(r.pitchAfter) + 'mm に変えています。', '');
+        '曲げ位置のずらし方だけで曲げた先のピッチを ' +
+        fmt(r.pairs[0].pitchAfter) + 'mm に揃えています。', '');
     }
     stag.result.innerHTML = html;
 
-    stag.figure.innerHTML = F.staggerSVG(count, pitch, angle, r.stagger, r.pitchAfter);
+    stag.figure.innerHTML = F.staggerSVG({
+      pitches: pitches,
+      offsets: r.offsets,
+      angle: angle,
+      pitchesAfter: r.pairs.map(function (p) { return p.pitchAfter; })
+    });
 
-    var rows = '';
-    for (var i = 0; i < count; i++) {
-      rows += '<tr><td>' + (i + 1) + '</td><td>' + fmt(r.stagger * i) + '</td></tr>';
-    }
+    var rows = r.offsets.map(function (x, i) {
+      return '<tr><td>' + (i + 1) + '</td>' +
+        (labels ? '<td>' + esc(labels[i]) + '</td>' : '') +
+        '<td>' + (i === 0 ? '—' : fmt(pitches[i - 1])) + '</td>' +
+        '<td>' + (i === 0 ? '—' : fmt(shifts[i - 1])) + '</td>' +
+        '<td>' + fmt(x) + '</td></tr>';
+    }).join('');
     stag.marks.innerHTML =
-      '<table><thead><tr><th>本</th><th>1本目からのずらし（mm）</th></tr></thead>' +
-      '<tbody>' + rows + '</tbody></table>';
+      '<table><thead><tr><th>本</th>' + (labels ? '<th>管</th>' : '') +
+      '<th>前との<br>ピッチ</th><th>前から<br>ずらす</th>' +
+      '<th>1本目<br>から</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   /* ------------------------------------------- モード5：サドル・支持点 */
@@ -975,7 +1037,8 @@
           return m ? m.dataset.mode : null;
         }),
         fields: fields,
-        rows: collectRows()
+        rows: collectRows(),
+        staggerImport: staggerImport
       }));
     } catch (e) { /* 容量オーバーなどは保存をあきらめる */ }
   }
@@ -991,6 +1054,10 @@
 
   function restoreState(d) {
     if (!d) return;
+
+    if (d.staggerImport && Array.isArray(d.staggerImport.pitches)) {
+      staggerImport = d.staggerImport;
+    }
 
     // 行数を合わせてから値を入れる（行は動的に作られるため）
     if (Array.isArray(d.rows)) {
@@ -1126,6 +1193,21 @@
     // 混在モードは行が動的なので、リスト全体で拾う
     mixed.list.addEventListener('input', renderMixed);
     mixed.list.addEventListener('change', renderMixed);
+    mixed.toStagger.addEventListener('click', function () {
+      if (!mixedLatest || !mixedLatest.pitches.length) return;
+      staggerImport = {
+        labels: mixedLatest.labels.slice(),
+        pitches: mixedLatest.pitches.slice()
+      };
+      stag.source.value = 'mixed';
+      activateTab($('.tab[data-tab="pitch"]'));
+      activateMode($('.mode[data-mode="stagger"]'));
+      renderAll();
+      saveState();
+      // 取り込んだ内容はカードの上のほうに出るので、先頭まで戻す
+      window.scrollTo(0, 0);
+    });
+
     mixed.add.addEventListener('click', function () { mixedAddRow('E25'); saveState(); });
     mixed.clear.addEventListener('click', function () {
       mixed.list.innerHTML = '';

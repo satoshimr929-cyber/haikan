@@ -101,23 +101,32 @@
    * 曲げの内側になる管ほど曲げ位置が手前になり、そのずれが stagger。
    * 1本目を内側（図の上）に置き、外側へ向かって順に曲げ位置をずらして描く。
    */
-  function staggerSVG(count, pitch, angleDeg, stagger, pitchAfter) {
-    if (!(count >= 2) || !(pitch > 0) || !isFinite(stagger)) return '';
+  function staggerSVG(o) {
+    if (!o) return '';
+    var pitches = o.pitches, offsets = o.offsets, angleDeg = o.angle;
+    var after = o.pitchesAfter || pitches;
+    var count = offsets ? offsets.length : 0;
+    if (count < 2 || !pitches || pitches.length !== count - 1) return '';
+    if (!pitches.every(function (v) { return v > 0; })) return '';
+    if (!offsets.every(isFinite)) return '';
 
     var t = angleDeg * Math.PI / 180;
     var cos = Math.cos(t), sin = Math.sin(t);
-    var leadIn = Math.max(pitch * 1.4, Math.abs(stagger) * 1.2, 40); // 曲げ手前の直線部
-    var leadOut = Math.max(Math.max(pitch, pitchAfter) * 1.6, 60);   // 曲げた先の直線部
+    var maxPitch = Math.max.apply(null, pitches);
+    var maxAfter = Math.max.apply(null, after);
+    var maxShift = Math.max.apply(null, offsets.map(Math.abs));
+    var leadIn = Math.max(maxPitch * 1.4, maxShift * 1.2, 40); // 曲げ手前の直線部
+    var leadOut = Math.max(Math.max(maxPitch, maxAfter) * 1.6, 60); // 曲げた先の直線部
 
     // モデル座標（mm・y は下向き）で各管の 始点／曲げ位置／終点 を出す。
     // ずらし量は負にもなるので、いちばん手前の曲げ位置から直線部を取る。
-    var i, vxs = [];
-    for (i = 0; i < count; i++) vxs.push(i * stagger);
-    var startX = Math.min.apply(null, vxs) - leadIn;
+    var i, rowY = [0];
+    for (i = 0; i < pitches.length; i++) rowY.push(rowY[i] + pitches[i]);
+    var startX = Math.min.apply(null, offsets) - leadIn;
 
     var pipes = [];
     for (i = 0; i < count; i++) {
-      var vxi = vxs[i], vyi = i * pitch;
+      var vxi = offsets[i], vyi = rowY[i];
       pipes.push({
         start: [startX, vyi],
         vertex: [vxi, vyi],
@@ -160,9 +169,9 @@
       '" y2="' + Y(pipes[count - 1].vertex[1]).toFixed(1) + '"/>');
 
     // 管の間隔が文字の高さより狭いと番号が重なるので、その場合は端だけに振る
-    var step = pitch * s;
+    var step = Math.min.apply(null, pitches) * s;
     var showAll = step >= 20;
-    var showEnds = (count - 1) * step >= 20;
+    var showEnds = (rowY[count - 1] - rowY[0]) * s >= 20;
 
     pipes.forEach(function (p, i) {
       o.push('<polyline class="pipe-line" points="' +
@@ -196,21 +205,22 @@
     o.push('<text x="' + aLabelX.toFixed(1) + '" y="' + aLabelY.toFixed(1) +
       '" text-anchor="middle">' + fmt(angleDeg) + '°</text>');
 
-    // 手前のピッチ（1本目と2本目の直線部のあいだ）
+    // 手前のピッチ。ペアごとに違うことがあるので、すべての区間に入れる
     var px = X(startX) + Math.min(26, leadIn * s * 0.4);
-    o.push('<line class="dim" x1="' + px.toFixed(1) + '" y1="' + Y(0).toFixed(1) +
-      '" x2="' + px.toFixed(1) + '" y2="' + Y(pitch).toFixed(1) + '"/>');
-    [0, pitch].forEach(function (y) {
+    o.push('<line class="dim" x1="' + px.toFixed(1) + '" y1="' + Y(rowY[0]).toFixed(1) +
+      '" x2="' + px.toFixed(1) + '" y2="' + Y(rowY[count - 1]).toFixed(1) + '"/>');
+    rowY.forEach(function (y) {
       o.push('<line class="dim" x1="' + (px - 4).toFixed(1) + '" y1="' + Y(y).toFixed(1) +
         '" x2="' + (px + 4).toFixed(1) + '" y2="' + Y(y).toFixed(1) + '"/>');
     });
-    if (pitch * s > 34) {
-      o.push('<text x="' + (px + 6).toFixed(1) + '" y="' + (Y(pitch / 2) + 4).toFixed(1) +
-        '">' + fmt(pitch) + '</text>');
-    }
+    pitches.forEach(function (v, k) {
+      if (v * s <= 34) return;
+      o.push(tryLabel(px + 6, Y((rowY[k] + rowY[k + 1]) / 2) + 4, fmt(v), 'start'));
+    });
 
     // 曲げた先のピッチ。曲げた先の直線部に直交する向きで引く
     var d = leadOut * 0.72;
+    var pitchAfter = after[0];
     var a0 = [pipes[0].vertex[0] + d * cos, pipes[0].vertex[1] - d * sin];
     var a1 = [a0[0] + pitchAfter * sin, a0[1] + pitchAfter * cos];
     o.push('<line class="dim" x1="' + X(a0[0]).toFixed(1) + '" y1="' + Y(a0[1]).toFixed(1) +
@@ -236,19 +246,26 @@
       o.push('<line class="dim" x1="' + X(p.vertex[0]).toFixed(1) + '" y1="' + (dimY - 5) +
         '" x2="' + X(p.vertex[0]).toFixed(1) + '" y2="' + (dimY + 5) + '"/>');
     });
-    var segW = (X(pipes[count - 1].vertex[0]) - X(pipes[0].vertex[0])) / (count - 1);
-    if (segW > 44) {
-      for (var k = 1; k < count; k++) {
+    var shifts = [];
+    for (var k = 1; k < count; k++) shifts.push(offsets[k] - offsets[k - 1]);
+    var uniform = shifts.every(function (v) { return Math.abs(v - shifts[0]) < 1e-6; });
+    var minSeg = Math.min.apply(null, shifts.map(function (v) { return Math.abs(v) * s; }));
+
+    if (minSeg > 44) {
+      for (k = 1; k < count; k++) {
         var x1 = X(pipes[k - 1].vertex[0]), x2 = X(pipes[k].vertex[0]);
-        o.push('<text x="' + ((x1 + x2) / 2).toFixed(1) + '" y="' + (dimY + LABEL_DROP) +
-          '" text-anchor="middle">' + fmt(stagger) + '</text>');
+        o.push(tryLabel((x1 + x2) / 2, dimY + LABEL_DROP, fmt(shifts[k - 1])));
       }
+    } else if (uniform) {
+      // 1つずつ書くと重なるので、同じ値ならまとめて「ずらし量 × 箇所数」で出す
+      o.push(tryLabel((X(pipes[0].vertex[0]) + X(pipes[count - 1].vertex[0])) / 2,
+        dimY + LABEL_DROP, fmt(shifts[0]) + ' × ' + (count - 1)));
     } else {
-      // 1つずつ書くと重なるので、まとめて「ずらし量 × 箇所数」で出す
-      o.push('<text x="' +
-        ((X(pipes[0].vertex[0]) + X(pipes[count - 1].vertex[0])) / 2).toFixed(1) +
-        '" y="' + (dimY + LABEL_DROP) + '" text-anchor="middle">' +
-        esc(fmt(stagger) + ' × ' + (count - 1)) + '</text>');
+      // ばらばらのときは入るものだけ書く（重なる分は tryLabel が落とす）
+      for (k = 1; k < count; k++) {
+        o.push(tryLabel((X(pipes[k - 1].vertex[0]) + X(pipes[k].vertex[0])) / 2,
+          dimY + LABEL_DROP, fmt(shifts[k - 1])));
+      }
     }
 
     o.push('</svg>');
