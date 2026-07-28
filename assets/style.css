@@ -49,12 +49,17 @@ body {
 
 /* ---------- ヘッダー / タブ ---------- */
 .appbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--line);
   background: var(--bg-card);
 }
+.appbar-title { flex: 1 1 auto; min-width: 0; }
 .appbar h1 { margin: 0; font-size: 1.15rem; letter-spacing: .04em; }
 .appbar .sub { margin: 2px 0 0; font-size: .8rem; color: var(--fg-dim); }
+.appbar .btn { flex: 0 0 auto; font-size: .78rem; padding: 6px 10px; }
 
 .tabs {
   display: flex;

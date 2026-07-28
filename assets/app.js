@@ -296,6 +296,7 @@
     $('.del', row).addEventListener('click', function () {
       row.remove();
       renderMixed();
+      saveState();
     });
     mixed.list.appendChild(row);
     renderMixed();
@@ -931,28 +932,146 @@
     }).join('');
   }
 
+  /* ---------------------------------------------------------- 入力の保存
+   * 入力した値・開いていたタブ・モードを localStorage に置いて、
+   * 次に開いたときに続きから使えるようにします。
+   * プライベートブラウズなどで使えない環境では、黙って保存なしで動きます。 */
+
+  var STORE_KEY = 'haikan.inputs.v1';
+  var storeReady = false;  // 復元し終えるまでは保存しない
+
+  var canStore = (function () {
+    try {
+      window.localStorage.setItem(STORE_KEY + '.probe', '1');
+      window.localStorage.removeItem(STORE_KEY + '.probe');
+      return true;
+    } catch (e) { return false; }
+  })();
+
+  /** 混在モードの行は id を持たないので、行ごとに拾う */
+  function collectRows() {
+    return $$('.pipe-row', mixed.list).map(function (r) {
+      return {
+        pipe: $('.pipe-select', r).value,
+        od: $('.od-input', r).value,
+        kind: $('.pitch-kind', r).value,
+        pitch: $('.pitch-input', r).value
+      };
+    });
+  }
+
+  function saveState() {
+    if (!storeReady || !canStore) return;
+    var fields = {};
+    $$('input[id], select[id]').forEach(function (el) { fields[el.id] = el.value; });
+
+    var active = $('.tab.is-active');
+    try {
+      window.localStorage.setItem(STORE_KEY, JSON.stringify({
+        v: 1,
+        tab: active ? active.dataset.tab : null,
+        modes: $$('.panel').map(function (p) {
+          var m = $('.mode.is-active', p);
+          return m ? m.dataset.mode : null;
+        }),
+        fields: fields,
+        rows: collectRows()
+      }));
+    } catch (e) { /* 容量オーバーなどは保存をあきらめる */ }
+  }
+
+  function readState() {
+    if (!canStore) return null;
+    try {
+      var raw = window.localStorage.getItem(STORE_KEY);
+      var d = raw ? JSON.parse(raw) : null;
+      return d && d.v === 1 ? d : null;
+    } catch (e) { return null; }
+  }
+
+  function restoreState(d) {
+    if (!d) return;
+
+    // 行数を合わせてから値を入れる（行は動的に作られるため）
+    if (Array.isArray(d.rows)) {
+      mixed.list.innerHTML = '';
+      d.rows.forEach(function (row) { mixedAddRow(row.pipe); });
+      $$('.pipe-row', mixed.list).forEach(function (r, i) {
+        var row = d.rows[i];
+        if (!row) return;
+        $('.pipe-select', r).value = row.pipe;
+        $('.od-input', r).value = row.od;
+        var kind = $('.pitch-kind', r);
+        kind.value = row.kind;
+        kind.dataset.prevKind = row.kind;
+        var pitch = $('.pitch-input', r);
+        pitch.value = row.pitch;
+        // 空欄のまま保存されていたら、既定値で埋め戻さずそのままにする
+        pitch.dataset.init = '1';
+      });
+    }
+
+    Object.keys(d.fields || {}).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.value = d.fields[id];
+    });
+
+    if (d.tab) {
+      var tab = $('.tab[data-tab="' + d.tab + '"]');
+      if (tab) activateTab(tab);
+    }
+    (d.modes || []).forEach(function (name) {
+      if (!name) return;
+      var btn = $('.mode[data-mode="' + name + '"]');
+      if (btn) activateMode(btn);
+    });
+
+    // 管を選び直したときだけ上限間隔と定尺を入れ替える仕掛けがあるので、
+    // 復元した管を「いま選ばれているもの」として覚えさせ、値を上書きさせない
+    var p = readPipe(sup.pipe, sup.pipeOd);
+    supLastSeries = p && p.size ? p.size.series : null;
+  }
+
+  function resetInputs() {
+    if (!window.confirm('入力をすべて既定値に戻します。よろしいですか？')) return;
+    if (canStore) {
+      try { window.localStorage.removeItem(STORE_KEY); } catch (e) { /* 無視 */ }
+    }
+    window.location.reload();
+  }
+
   /* -------------------------------------------------------------- 初期化 */
+
+  function activateTab(tab) {
+    $$('.tab').forEach(function (x) {
+      x.classList.toggle('is-active', x === tab);
+      x.setAttribute('aria-selected', x === tab ? 'true' : 'false');
+    });
+    $$('.panel').forEach(function (p) {
+      p.classList.toggle('is-active', p.id === 'panel-' + tab.dataset.tab);
+    });
+  }
+
+  /** モードの切り替えは、そのタブの中だけに効かせる */
+  function activateMode(btn) {
+    var panel = btn.closest('.panel');
+    if (!panel) return;
+    $$('.mode', panel).forEach(function (x) { x.classList.toggle('is-active', x === btn); });
+    $$('.mode-panel', panel).forEach(function (p) {
+      p.classList.toggle('is-active', p.id === 'mode-' + btn.dataset.mode);
+    });
+  }
 
   function initTabs() {
     $$('.tab').forEach(function (t) {
-      t.addEventListener('click', function () {
-        $$('.tab').forEach(function (x) {
-          x.classList.toggle('is-active', x === t);
-          x.setAttribute('aria-selected', x === t ? 'true' : 'false');
-        });
-        $$('.panel').forEach(function (p) {
-          p.classList.toggle('is-active', p.id === 'panel-' + t.dataset.tab);
-        });
-      });
+      t.addEventListener('click', function () { activateTab(t); saveState(); });
     });
 
     $$('.mode').forEach(function (m) {
       m.addEventListener('click', function () {
-        $$('.mode').forEach(function (x) { x.classList.toggle('is-active', x === m); });
-        $$('.mode-panel').forEach(function (p) {
-          p.classList.toggle('is-active', p.id === 'mode-' + m.dataset.mode);
-        });
+        activateMode(m);
         renderAll();
+        saveState();
       });
     });
   }
@@ -1007,10 +1126,11 @@
     // 混在モードは行が動的なので、リスト全体で拾う
     mixed.list.addEventListener('input', renderMixed);
     mixed.list.addEventListener('change', renderMixed);
-    mixed.add.addEventListener('click', function () { mixedAddRow('E25'); });
+    mixed.add.addEventListener('click', function () { mixedAddRow('E25'); saveState(); });
     mixed.clear.addEventListener('click', function () {
       mixed.list.innerHTML = '';
       renderMixed();
+      saveState();
     });
 
     // 角度のクイック選択。どのモードでも data-target の欄に値を入れて描き直す
@@ -1020,13 +1140,27 @@
         c.addEventListener('click', function () {
           target.value = c.dataset.angle;
           renderAll();
+          saveState();
         });
       });
     });
 
     initTabs();
-    ['E25', 'E31', 'E51'].forEach(mixedAddRow);
+    $('#reset-btn').addEventListener('click', resetInputs);
+
+    var saved = readState();
+    if (saved) {
+      restoreState(saved);
+    } else {
+      ['E25', 'E31', 'E51'].forEach(mixedAddRow);
+    }
+
     renderAll();
+
+    // 復元が終わってから保存を始める（途中の状態を書き込まないため）
+    storeReady = true;
+    document.addEventListener('input', saveState);
+    document.addEventListener('change', saveState);
   }
 
   if (document.readyState === 'loading') {
