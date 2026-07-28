@@ -121,6 +121,13 @@ main { padding: 12px; max-width: 900px; margin: 0 auto; }
   padding: 16px;
 }
 .card h2 { margin: 0 0 4px; font-size: 1rem; }
+.sub-head {
+  margin: 20px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: .85rem;
+  color: var(--fg-dim);
+}
 .hint { margin: 0 0 14px; font-size: .82rem; color: var(--fg-dim); }
 
 /* ---------- 入力 ---------- */
@@ -314,6 +321,9 @@ select { appearance: none; background-image: none; }
   stroke-dasharray: 4 4;
 }
 .figure .vertex { fill: var(--bg-card); stroke: var(--accent); stroke-width: 2; }
+/* 管の接続点（カップリング）と、そこに当たっているサドル */
+.figure .coupling { fill: var(--fg-dim); opacity: .55; }
+.figure .saddle-bad { stroke: var(--bad); stroke-width: 2.5; }
 /* SVG は viewBox 幅 600 を画面幅に合わせて縮めるため、
    画面が狭いほど文字も小さくなる。狭い画面では user unit を大きくして補う。 */
 .figure text { fill: var(--fg-dim); font-size: 12px; font-family: inherit; }
@@ -338,6 +348,7 @@ td:first-child, th:first-child { text-align: left; }
 td { font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: var(--accent-soft); }
 td.bad-cell { color: var(--bad); font-weight: 700; }
+tr.row-bad td { color: var(--bad); }
 .series-head td {
   background: var(--bg-input);
   color: var(--fg-dim);

@@ -528,46 +528,77 @@
     return o.join('');
   }
 
-  /** サドル・支持点の割り付けを横から見た図 */
-  function supportSVG(length, positions, margin) {
-    if (!(length > 0) || !positions || positions.length < 2) return '';
+  /**
+   * サドル・支持点の割り付けを横から見た図。
+   * @param {object} p
+   * @param {number} p.length
+   * @param {number} p.margin
+   * @param {Array} p.positions supportPlan の positions（{x, kind, clash, suggest}）
+   * @param {number[]} [p.joints] 管の接続点
+   * @param {number} [p.couplingLength] カップリングの長さ（接続点の描画に使う）
+   */
+  function supportSVG(p) {
+    if (!p || !(p.length > 0) || !p.positions || p.positions.length < 2) return '';
+    var length = p.length, margin = p.margin;
+    var positions = p.positions;
+    var joints = p.joints || [];
+    var coupling = p.couplingLength > 0 ? p.couplingLength : 0;
 
     var pipeY = 0, h = length * 0.05; // 管の見た目の太さぶんだけ縦幅を持たせる
     var c = makeCanvas([[0, -h], [length, h]]);
     if (!c) return '';
     var o = [open(c, 'サドルの割り付け図')];
+    var py = c.Y(pipeY);
 
     o.push(polyline(c, [[0, pipeY], [length, pipeY]]));
 
-    positions.forEach(function (x, i) {
-      var px = c.X(x), py = c.Y(pipeY);
+    // 接続点。カップリングの長さぶんの太い区間として管の上に重ねる
+    joints.forEach(function (j) {
+      var w = Math.max(coupling * c.s, 5);
+      o.push('<rect class="coupling" x="' + (c.X(j) - w / 2).toFixed(1) +
+        '" y="' + (py - 5) + '" width="' + w.toFixed(1) + '" height="10" rx="2"/>');
+    });
+
+    var seg = c.X(positions[1].x) - c.X(positions[0].x);
+
+    positions.forEach(function (pos, i) {
+      var px = c.X(pos.x);
+      var bad = pos.clash !== null && pos.clash !== undefined;
       // サドルを管をまたぐコの字で表す
-      o.push('<path class="dim" fill="none" d="M ' + (px - 6).toFixed(1) + ' ' +
-        (py + 9) + ' L ' + (px - 6).toFixed(1) + ' ' + (py - 6) +
+      o.push('<path class="' + (bad ? 'saddle-bad' : 'dim') + '" fill="none" d="M ' +
+        (px - 6).toFixed(1) + ' ' + (py + 9) +
+        ' L ' + (px - 6).toFixed(1) + ' ' + (py - 6) +
         ' L ' + (px + 6).toFixed(1) + ' ' + (py - 6) +
         ' L ' + (px + 6).toFixed(1) + ' ' + (py + 9) + '"/>');
       o.push('<line class="cl" x1="' + px.toFixed(1) + '" y1="' + (py - 8) +
         '" x2="' + px.toFixed(1) + '" y2="' + (c.dimY + 6) + '"/>');
-      if (i === 0 || i === positions.length - 1 ||
-          (c.X(positions[1]) - c.X(positions[0])) >= 24) {
+      // 逃がし先があれば、そこに薄いサドルを重ねて見せる
+      if (pos.suggest !== null && pos.suggest !== undefined) {
+        var sx = c.X(pos.suggest);
+        o.push('<path class="ghost" fill="none" d="M ' + (sx - 6).toFixed(1) + ' ' +
+          (py + 9) + ' L ' + (sx - 6).toFixed(1) + ' ' + (py - 6) +
+          ' L ' + (sx + 6).toFixed(1) + ' ' + (py - 6) +
+          ' L ' + (sx + 6).toFixed(1) + ' ' + (py + 9) + '"/>');
+      }
+      if (i === 0 || i === positions.length - 1 || seg >= 24) {
         o.push(tryLabel(px, py - 12, String(i + 1), 'middle', 'strong'));
       }
     });
 
     // 端あきと支持点の間隔
-    var seg = c.X(positions[1]) - c.X(positions[0]);
-    o.push(dimLine(c.X(0), c.dimY, c.X(positions[0]), c.dimY,
-      seg > 44 ? fmt(margin) : null, 'h'));
+    var showEach = seg > 44;
+    o.push(dimLine(c.X(0), c.dimY, c.X(positions[0].x), c.dimY,
+      showEach ? fmt(margin) : null, 'h'));
     for (var i = 1; i < positions.length; i++) {
-      o.push(dimLine(c.X(positions[i - 1]), c.dimY, c.X(positions[i]), c.dimY,
-        seg > 44 ? fmt(positions[i] - positions[i - 1]) : null, 'h'));
+      o.push(dimLine(c.X(positions[i - 1].x), c.dimY, c.X(positions[i].x), c.dimY,
+        showEach ? fmt(positions[i].x - positions[i - 1].x) : null, 'h'));
     }
-    o.push(dimLine(c.X(positions[positions.length - 1]), c.dimY, c.X(length), c.dimY,
-      seg > 44 ? fmt(length - positions[positions.length - 1]) : null, 'h'));
-    if (seg <= 44) {
-      o.push(tryLabel((c.X(positions[0]) + c.X(positions[positions.length - 1])) / 2,
-        c.dimY + LABEL_DROP,
-        fmt(positions[1] - positions[0]) + ' × ' + (positions.length - 1)));
+    var lastX = positions[positions.length - 1].x;
+    o.push(dimLine(c.X(lastX), c.dimY, c.X(length), c.dimY,
+      showEach ? fmt(length - lastX) : null, 'h'));
+    if (!showEach) {
+      o.push(tryLabel((c.X(positions[0].x) + c.X(lastX)) / 2, c.dimY + LABEL_DROP,
+        fmt(positions[1].x - positions[0].x) + ' × ' + (positions.length - 1)));
     }
 
     o.push('</svg>');
