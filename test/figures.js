@@ -73,8 +73,22 @@ var CASES = [
     { 'stag-pitch': '200', 'stag-pitch2': '20', 'stag-angle': '60', 'stag-count': '6' }
   ] },
   { tab: 'pitch', mode: 'support', fig: '#sup-figure', sets: [
-    { 'sup-length': '5000' }, { 'sup-length': '1000' }, { 'sup-length': '30000' },
-    { 'sup-length': '8000', 'sup-span': '1500' }, { 'sup-length': '600', 'sup-margin': '300' }
+    { 'sup-length': '5000', 'sup-stock': '', 'sup-extra': '' },
+    { 'sup-length': '1000' }, { 'sup-length': '30000' },
+    { 'sup-length': '8000', 'sup-span': '1500' },
+    { 'sup-length': '600', 'sup-margin': '300' },
+    // 接続点あり
+    { 'sup-length': '10000', 'sup-margin': '300', 'sup-span': '2000', 'sup-stock': '3660' },
+    { 'sup-length': '30000', 'sup-stock': '3660' },               // 接続点が多い長尺
+    { 'sup-length': '4000', 'sup-stock': '', 'sup-extra': '2000' }, // 当たる
+    { 'sup-length': '4000', 'sup-extra': '300, 2000, 3700' },       // 端でも当たる
+    { 'sup-length': '10000', 'sup-stock': '3660', 'sup-coupling': '600', 'sup-saddle': '200' },
+    // 樹脂管の両側支持
+    { 'sup-length': '6000', 'sup-span': '1500', 'sup-stock': '', 'sup-extra': '2000, 4000',
+      'sup-coupling': '60', 'sup-saddle': '25', 'sup-atjoint': 'on' },
+    { 'sup-extra': '3000, 3100' },                                  // 接続点が近い
+    { 'sup-length': '20000', 'sup-extra': '', 'sup-stock': '4000' }, // 両側支持で長尺
+    { 'sup-length': '6000', 'sup-stock': '', 'sup-extra': '2000, 4000', 'sup-atjoint': 'off' }
   ] },
   { tab: 'bend', mode: 'offset', fig: '#off-figure', sets: [
     { 'off-rise': '100', 'off-angle': '30' }, { 'off-angle': '45' },

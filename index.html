@@ -236,7 +236,9 @@
       <h2>サドル・支持点の割り付け</h2>
       <p class="hint">
         配管の全長から、サドルの数と位置を出します。上限間隔は選んだ管の材質から入りますが、
-        現場の基準に合わせて書き換えられます。
+        現場の基準に合わせて書き換えられます。管の接続点を入れると、サドルが当たらないかを
+        確認できます。樹脂管では接続点も支持の対象なので、両側に支持点を置きます
+        （「材質にしたがう」のときの動き）。
       </p>
 
       <div class="field">
@@ -259,6 +261,54 @@
         <div class="field">
           <label for="sup-margin">端からの距離</label>
           <div class="unit"><input type="number" id="sup-margin" step="10" value="300"><span>mm</span></div>
+        </div>
+      </div>
+
+      <h3 class="sub-head">管の接続点（カップリング）</h3>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="sup-stock">定尺</label>
+          <div class="unit">
+            <input type="number" id="sup-stock" step="10" placeholder="定尺なし"><span>mm</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="sup-first">最初の継ぎまで</label>
+          <div class="unit">
+            <input type="number" id="sup-first" step="10" placeholder="定尺と同じ"><span>mm</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="sup-extra">追加の接続点（カンマ区切り）</label>
+        <input type="text" id="sup-extra" inputmode="numeric" placeholder="例）1200, 3400">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="sup-coupling">カップリングの長さ</label>
+          <div class="unit"><input type="number" id="sup-coupling" step="5" value="60"><span>mm</span></div>
+        </div>
+        <div class="field">
+          <label for="sup-saddle">サドルの幅</label>
+          <div class="unit"><input type="number" id="sup-saddle" step="5" value="25"><span>mm</span></div>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="sup-atjoint">接続点の両側に支持を置く</label>
+          <select id="sup-atjoint">
+            <option value="auto">材質にしたがう</option>
+            <option value="on">置く</option>
+            <option value="off">置かない</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="sup-joint-offset">接続点から支持まで</label>
+          <div class="unit"><input type="number" id="sup-joint-offset" step="10" value="150"><span>mm</span></div>
         </div>
       </div>
 

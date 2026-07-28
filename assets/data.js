@@ -7,6 +7,14 @@
  * PF管・CD管は JIS C 8411 に基づく代表値で、メーカーにより数 mm の差があります。
  * ポリエチライニング電線管は JIS C 8380 G形。鋼管部は厚鋼電線管と同寸で、
  * 被覆厚は 0.6mm（公差 ±0.2mm 程度）を代表値として計算しています。
+ *
+ * 施工まわりの値（公共建築工事標準仕様書 電気設備工事編）:
+ *   maxSupportSpan = 支持点間隔の上限。金属管 2000 / 合成樹脂管 1500。
+ *     （金属製可とう電線管は 1000 だが、この表には管種として持っていません）
+ *   jointSupport   = 管相互の接続点が支持の対象か。金属管は明記がなく false、
+ *     合成樹脂管は対象なので true（PF/CD管は「接続点の両側」）。
+ *   stockLength    = 定尺。鋼製電線管 3660 / 硬質ビニル電線管 4000。
+ *     PF管・CD管はコイル巻きで定尺がないため null。
  */
 (function (root) {
   'use strict';
@@ -14,6 +22,8 @@
   var PIPE_SERIES = [
     {
       id: 'E',
+      stockLength: 3660,
+      jointSupport: false,
       material: '鋼',
       maxSupportSpan: 2000,
       name: 'ねじなし電線管',
@@ -32,6 +42,8 @@
     },
     {
       id: 'C',
+      stockLength: 3660,
+      jointSupport: false,
       material: '鋼',
       maxSupportSpan: 2000,
       name: '薄鋼電線管',
@@ -50,6 +62,8 @@
     },
     {
       id: 'G',
+      stockLength: 3660,
+      jointSupport: false,
       material: '鋼',
       maxSupportSpan: 2000,
       name: '厚鋼電線管',
@@ -71,6 +85,8 @@
     },
     {
       id: 'PF',
+      stockLength: null,
+      jointSupport: true,
       material: '樹脂',
       maxSupportSpan: 1500,
       name: '合成樹脂製可とう電線管（PF管）',
@@ -89,6 +105,8 @@
     },
     {
       id: 'CD',
+      stockLength: null,
+      jointSupport: true,
       material: '樹脂',
       maxSupportSpan: 1500,
       name: '合成樹脂製可とう電線管（CD管）',
@@ -107,6 +125,8 @@
     },
     {
       id: 'VE',
+      stockLength: 4000,
+      jointSupport: true,
       material: '樹脂',
       maxSupportSpan: 1500,
       name: '硬質ビニル電線管',
@@ -128,6 +148,8 @@
     },
     {
       id: 'PE',
+      stockLength: 3660,
+      jointSupport: false,
       material: '鋼',
       maxSupportSpan: 2000,
       name: 'ポリエチライニング電線管（ねじ付き）',
@@ -186,6 +208,8 @@
           approx: !!s.approx,
           material: s.material,
           maxSupportSpan: s.maxSupportSpan,
+          stockLength: s.stockLength,
+          jointSupport: s.jointSupport,
           key: z.key,
           name: z.name,
           label: z.label,

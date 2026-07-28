@@ -530,10 +530,23 @@
   var sup = {
     pipe: $('#sup-pipe'), pipeOd: $('#sup-pipe-od'),
     length: $('#sup-length'), span: $('#sup-span'), margin: $('#sup-margin'),
+    stock: $('#sup-stock'), first: $('#sup-first'), extra: $('#sup-extra'),
+    coupling: $('#sup-coupling'), saddle: $('#sup-saddle'),
+    atJoint: $('#sup-atjoint'), jointOffset: $('#sup-joint-offset'),
     result: $('#sup-result'), figure: $('#sup-figure'), marks: $('#sup-marks')
   };
-  // 管を選び直したときだけ上限間隔を入れ替える（手で直した値を毎回上書きしないため）
+  // 管を選び直したときだけ上限間隔と定尺を入れ替える（手で直した値を毎回上書きしないため）
   var supLastSeries = null;
+
+  var SUP_KIND = { even: '等間隔', joint: '接続点の両側', fill: '間を埋める' };
+
+  /** 「1200, 3400」のような入力を数値の配列にする */
+  function parseList(text) {
+    return String(text || '').split(/[,、\s]+/)
+      .filter(function (s) { return s !== ''; })
+      .map(function (s) { return parseFloat(s); })
+      .filter(function (v) { return isFinite(v); });
+  }
 
   function renderSupport() {
     var p = readPipe(sup.pipe, sup.pipeOd);
@@ -541,6 +554,7 @@
 
     if (series && series.id !== supLastSeries) {
       sup.span.value = series.maxSupportSpan;
+      sup.stock.value = series.stockLength === null ? '' : series.stockLength;
       supLastSeries = series.id;
     } else if (!series) {
       supLastSeries = null;
@@ -549,43 +563,104 @@
     var length = parseFloat(sup.length.value);
     var maxSpan = parseFloat(sup.span.value);
     var margin = parseFloat(sup.margin.value);
-    var r;
+    var stock = sup.stock.value === '' ? null : parseFloat(sup.stock.value);
+    var first = sup.first.value === '' ? null : parseFloat(sup.first.value);
+    sup.first.placeholder = stock ? '定尺と同じ（' + fmt(stock) + '）' : '定尺と同じ';
+
+    // 接続点の両側に支持を置くか。既定は材質にしたがう
+    var mode = sup.atJoint.value;
+    var atJoint = mode === 'on' || (mode === 'auto' && !!(series && series.jointSupport));
+
+    var joints, r;
     try {
-      r = C.supportLayout(length, maxSpan, margin);
+      joints = C.jointPositions(length, stock, first, parseList(sup.extra.value));
+      r = C.supportPlan({
+        length: length, maxSpan: maxSpan, endMargin: margin,
+        joints: joints,
+        couplingLength: parseFloat(sup.coupling.value),
+        saddleWidth: parseFloat(sup.saddle.value),
+        supportAtJoints: atJoint,
+        jointOffset: parseFloat(sup.jointOffset.value)
+      });
     } catch (e) {
       sup.result.innerHTML = msg(e.message, 'warn');
       sup.figure.innerHTML = ''; sup.marks.innerHTML = '';
       return;
     }
 
+    var maxUsed = r.spans.length ? Math.max.apply(null, r.spans) : 0;
+
     var html = big('サドルの数', String(r.count), '個');
     html += kv([
-      ['支持点の間隔', fmt(r.span) + ' mm'],
+      ['いちばん広い間隔', fmt(maxUsed) + ' mm'],
       ['間隔の上限', fmt(maxSpan) + ' mm'],
+      ['接続点', joints.length ? joints.length + ' 箇所' : 'なし'],
       ['端からの距離', fmt(margin) + ' mm'],
       ['配管の全長', fmt(length) + ' mm']
     ]);
 
-    if (!r.ok) {
+    if (maxUsed > maxSpan + 1e-9) {
       html += msg('この条件では上限間隔に収まりません。端からの距離を見直してください。', 'bad');
     }
+
+    if (r.clashes.length) {
+      var lines = r.clashes.map(function (cl) {
+        var at = fmt(r.positions[cl.index].x) + 'mm';
+        if (cl.suggest === null) {
+          return (cl.index + 1) + '番（' + at + '）は逃がす場所がありません';
+        }
+        var d = cl.suggest - r.positions[cl.index].x;
+        return (cl.index + 1) + '番（' + at + '）を ' + fmt(Math.abs(d)) + 'mm ' +
+          (d > 0 ? '先へ' : '手前へ') + '（' + fmt(cl.suggest) + 'mm）';
+      });
+      html += msg('サドルが接続点に当たっています。' + lines.join('、') + '。', 'bad');
+      if (r.clashes.some(function (cl) { return cl.suggest === null; })) {
+        html += msg('逃がすと上限間隔を超えてしまう箇所があります。' +
+          'サドルを1つ増やすか、接続点の位置そのものを見直してください。', 'warn');
+      }
+    } else if (joints.length) {
+      html += msg('どのサドルも接続点に当たっていません。', 'ok');
+    }
+
+    if (r.supportAtJoints) {
+      html += msg('接続点の両側 ' + fmt(r.jointOffset) + 'mm の位置に支持点を置いたうえで、' +
+        '間を上限間隔以下で埋めています。' +
+        (r.jointOffset > parseFloat(sup.jointOffset.value)
+          ? '（指定の距離ではカップリングに当たるため ' + fmt(r.jointOffset) + 'mm まで広げました）'
+          : ''), '');
+    }
+
     if (series) {
-      html += msg(series.short + 'は' + series.material + '製なので、支持点間隔の目安は ' +
-        fmt(series.maxSupportSpan) + 'mm 以下です。' +
-        '（金属管2m以下・合成樹脂管1.5m以下、ボックスや管端からは0.3m以内。' +
-        '現場の基準があればそちらを優先してください）', '');
+      html += msg(series.short + 'は' + series.material + '製です。' +
+        '支持点間隔の目安は ' + fmt(series.maxSupportSpan) + 'mm 以下、' +
+        (series.jointSupport
+          ? '管相互の接続点も支持の対象です（PF管・CD管は接続点の両側）。'
+          : '管相互の接続点は支持の対象として明記されていません（ボックス等との接続点と管端が対象）。') +
+        '（出典：公共建築工事標準仕様書 電気設備工事編。金属管2m以下・合成樹脂管1.5m以下・' +
+        '金属製可とう電線管1m以下、ボックスや管端からは0.3m以内。' +
+        '内線規程にも同様の規定がありますが原文は未確認です。' +
+        '現場や施工要領の基準があればそちらを優先してください）', '');
     }
     sup.result.innerHTML = html;
 
-    sup.figure.innerHTML = F.supportSVG(length, r.positions, margin);
+    sup.figure.innerHTML = F.supportSVG({
+      length: length, margin: margin, positions: r.positions,
+      joints: joints, couplingLength: parseFloat(sup.coupling.value)
+    });
 
-    var rows = r.positions.map(function (x, i) {
-      return '<tr><td>' + (i + 1) + '</td><td>' + fmt(x) + '</td><td>' +
-        (i === 0 ? '—' : fmt(x - r.positions[i - 1])) + '</td></tr>';
+    var rows = r.positions.map(function (pos, i) {
+      return '<tr' + (pos.clash === null ? '' : ' class="row-bad"') + '>' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td>' + fmt(pos.x) + '</td>' +
+        '<td>' + (i === 0 ? '—' : fmt(pos.x - r.positions[i - 1].x)) + '</td>' +
+        '<td>' + esc(SUP_KIND[pos.kind] || pos.kind) + '</td>' +
+        '<td>' + (pos.clash === null ? '—'
+          : (pos.suggest === null ? '当たり' : '当たり→' + fmt(pos.suggest))) + '</td>' +
+        '</tr>';
     }).join('');
     sup.marks.innerHTML =
-      '<table><thead><tr><th>番</th><th>端からの位置（mm）</th>' +
-      '<th>前から（mm）</th></tr></thead><tbody>' + rows + '</tbody></table>';
+      '<table><thead><tr><th>番</th><th>端から</th><th>前から</th>' +
+      '<th>種別</th><th>接続点</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   /* ------------------------------------------ 曲げ1：オフセット（振り） */
@@ -855,7 +930,9 @@
       even.gap, even.count, even.pitch], renderEven);
     bind([mixed.mode, mixed.gap, mixed.width, mixed.margin], renderMixed);
     bind([stag.pitch, stag.pitch2, stag.angle, stag.count], renderStagger);
-    bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin], renderSupport);
+    bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin,
+      sup.stock, sup.first, sup.extra, sup.coupling, sup.saddle,
+      sup.atJoint, sup.jointOffset], renderSupport);
     bind([off.rise, off.angle], renderOffset);
     bind([tk.pipe, tk.pipeOd, tk.a, tk.b, tk.radius, tk.angle], renderTakeup);
     bind([sd.kind, sd.height, sd.angle, sd.width, sd.clear], renderSaddle);

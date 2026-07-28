@@ -457,6 +457,200 @@
     };
   }
 
+  /* ------------------------------------------ 管の接続点（カップリング）
+   * 支持点との関係は材質で規定が違います（公共建築工事標準仕様書 電気設備工事編）。
+   *   金属管   : 管相互の接続点は支持の対象に明記なし → サドルと当たらなければよい
+   *   合成樹脂管: 接続点も支持の対象（PF/CD管は「接続点の両側」）→ 両側に置く
+   * どちらで扱うかは supportPlan の supportAtJoints で切り替えます。 */
+
+  /**
+   * 接続点の位置を並べる。定尺で切り継いでいく分と、個別に指定した分を合わせる。
+   * @param {number} length      配管の全長
+   * @param {number} [stockLength] 定尺（無ければ定尺ぶんは並べない）
+   * @param {number} [firstJoint]  最初の接続点までの距離（省略時は定尺と同じ）
+   * @param {number[]} [extra]     個別に足す接続点
+   * @returns {number[]} 昇順・重複なし。両端（0 と length）は含まない
+   */
+  function jointPositions(length, stockLength, firstJoint, extra) {
+    req(length, '配管の全長');
+    var out = [];
+
+    if (isNum(stockLength) && stockLength > 0) {
+      var first = isNum(firstJoint) && firstJoint > 0 ? firstJoint : stockLength;
+      for (var x = first; x < length; x += stockLength) out.push(x);
+    }
+    (extra || []).forEach(function (v, i) {
+      out.push(req(v, (i + 1) + '個目の接続点'));
+    });
+
+    return out
+      .filter(function (v) { return v > 0 && v < length; })
+      .sort(function (a, b) { return a - b; })
+      .filter(function (v, i, arr) { return i === 0 || Math.abs(v - arr[i - 1]) > 1e-6; });
+  }
+
+  /** 位置 x が、どれかの接続点と clear 未満まで近づいているか */
+  function clashingJoint(x, joints, clear) {
+    for (var i = 0; i < joints.length; i++) {
+      if (Math.abs(x - joints[i]) < clear - 1e-9) return joints[i];
+    }
+    return null;
+  }
+
+  /**
+   * 接続点を踏まえた支持点の割り付け。
+   * @param {object} o
+   * @param {number} o.length            配管の全長
+   * @param {number} o.maxSpan           支持点間隔の上限
+   * @param {number} o.endMargin         端からの距離
+   * @param {number[]} [o.joints]        接続点の位置
+   * @param {number} [o.couplingLength]  カップリングの長さ
+   * @param {number} [o.saddleWidth]     サドルの幅
+   * @param {boolean} [o.supportAtJoints] 接続点の両側に支持を置くか
+   * @param {number} [o.jointOffset]     接続点から両側の支持までの距離。
+   *   規定は「両側」としか言わないので、実際に打てる距離を指定できるようにしてある。
+   *   カップリングと当たらない最小値（clear）を下回る場合は clear まで押し上げる。
+   * @returns {{positions:Array, spans:number[], clear:number, clashes:Array, ok:boolean}}
+   *   positions の要素は {x, kind:'even'|'joint'|'fill', clash:number|null, suggest:number|null}
+   */
+  function supportPlan(o) {
+    o = o || {};
+    var length = req(o.length, '配管の全長');
+    var maxSpan = req(o.maxSpan, '支持点間隔の上限');
+    var endMargin = req(o.endMargin, '端からの距離');
+    if (maxSpan <= 0) throw new Error('支持点間隔の上限は0より大きい値を入力してください');
+    if (length <= 0) throw new Error('配管の全長は0より大きい値を入力してください');
+
+    var joints = (o.joints || []).slice().sort(function (a, b) { return a - b; });
+    var coupling = isNum(o.couplingLength) ? o.couplingLength : 0;
+    var saddle = isNum(o.saddleWidth) ? o.saddleWidth : 0;
+    // サドルの芯が接続点からこれ以上離れていれば当たらない
+    var clear = (coupling + saddle) / 2;
+
+    // 接続点の両側に置くときの距離。指定がなければカップリングを避ける最小値
+    var offset = isNum(o.jointOffset) ? Math.max(o.jointOffset, clear) : clear;
+
+    var positions;
+
+    if (o.supportAtJoints && joints.length) {
+      positions = layoutAroundJoints(length, maxSpan, endMargin, joints, clear, offset);
+    } else {
+      positions = layoutEvenAvoidingJoints(length, maxSpan, endMargin, joints, clear, maxSpan);
+    }
+
+    var spans = [];
+    for (var i = 1; i < positions.length; i++) {
+      spans.push(positions[i].x - positions[i - 1].x);
+    }
+
+    var clashes = positions.map(function (p, idx) {
+      return p.clash === null ? null : { index: idx, joint: p.clash, suggest: p.suggest };
+    }).filter(Boolean);
+
+    return {
+      positions: positions,
+      spans: spans,
+      count: positions.length,
+      clear: clear,
+      jointOffset: offset,
+      joints: joints,
+      clashes: clashes,
+      supportAtJoints: !!(o.supportAtJoints && joints.length),
+      ok: spans.every(function (v) { return v <= maxSpan + 1e-9; }) && !clashes.length
+    };
+  }
+
+  /** 金属管向け：等間隔に割ってから、接続点と当たる支持点に逃がし先を添える */
+  function layoutEvenAvoidingJoints(length, maxSpan, endMargin, joints, clear) {
+    var base = supportLayout(length, maxSpan, endMargin);
+    var xs = base.positions;
+
+    return xs.map(function (x, i) {
+      var hit = clashingJoint(x, joints, clear);
+      return {
+        x: x,
+        kind: 'even',
+        clash: hit,
+        suggest: hit === null ? null
+          : suggestShift(x, i, xs, joints, clear, maxSpan, length, endMargin)
+      };
+    });
+  }
+
+  /**
+   * 当たっている支持点の逃がし先。接続点の手前と先を試し、
+   * 両隣との間隔が上限に収まり、ほかの接続点とも当たらないほうを返す。
+   * 移動量の小さいほうを優先する。どちらも駄目なら null。
+   */
+  function suggestShift(x, i, xs, joints, clear, maxSpan, length, endMargin) {
+    var hit = clashingJoint(x, joints, clear);
+    if (hit === null) return null;
+
+    var prev = i > 0 ? xs[i - 1] : 0;
+    var next = i < xs.length - 1 ? xs[i + 1] : length;
+    var first = i === 0, last = i === xs.length - 1;
+
+    var candidates = [hit - clear, hit + clear].filter(function (c) {
+      if (c < endMargin - 1e-9 || c > length - endMargin + 1e-9) return false;
+      if (clashingJoint(c, joints, clear) !== null) return false;
+      // 両隣との間隔。端の支持点は管端までの距離が端あき以内かも見る
+      if (!first && c - prev > maxSpan + 1e-9) return false;
+      if (!last && next - c > maxSpan + 1e-9) return false;
+      if (first && c > endMargin + 1e-9 && c > maxSpan + 1e-9) return false;
+      return true;
+    });
+
+    if (!candidates.length) return null;
+    candidates.sort(function (a, b) { return Math.abs(a - x) - Math.abs(b - x); });
+    return candidates[0];
+  }
+
+  /** 樹脂管向け：接続点の両側を先に固定し、空いた区間を上限以下で埋める */
+  function layoutAroundJoints(length, maxSpan, endMargin, joints, clear, offset) {
+    var fixed = [{ x: endMargin, kind: 'even' }];
+
+    joints.forEach(function (j) {
+      [j - offset, j + offset].forEach(function (x) {
+        // 端あきの内側へ丸める
+        var v = Math.min(Math.max(x, endMargin), length - endMargin);
+        fixed.push({ x: v, kind: 'joint' });
+      });
+    });
+    fixed.push({ x: length - endMargin, kind: 'even' });
+
+    fixed.sort(function (a, b) { return a.x - b.x; });
+
+    // 近すぎる点は 1 つにまとめる（接続点どうしが近い場合など）。
+    // 接続点由来のほうを残して、由来が分かるようにしておく。
+    var merged = [];
+    fixed.forEach(function (p) {
+      var last = merged[merged.length - 1];
+      if (last && p.x - last.x < Math.max(offset, 1)) {
+        if (p.kind === 'joint') last.kind = 'joint';
+        return;
+      }
+      merged.push({ x: p.x, kind: p.kind });
+    });
+
+    // 上限を超える区間に中間支持点を足す
+    var out = [];
+    for (var i = 0; i < merged.length; i++) {
+      out.push(merged[i]);
+      if (i === merged.length - 1) break;
+      var gap = merged[i + 1].x - merged[i].x;
+      var add = Math.ceil(gap / maxSpan) - 1;
+      for (var k = 1; k <= add; k++) {
+        out.push({ x: merged[i].x + gap * k / (add + 1), kind: 'fill' });
+      }
+    }
+
+    return out.map(function (p) {
+      // 両側に置いた時点で接続点は避けているが、丸めた結果を念のため見る
+      var hit = clashingJoint(p.x, joints, clear);
+      return { x: p.x, kind: p.kind, clash: hit, suggest: null };
+    });
+  }
+
   var api = {
     centerPitch: centerPitch,
     clearanceFromPitch: clearanceFromPitch,
@@ -474,7 +668,9 @@
     minBendRadius: minBendRadius,
     saddle3: saddle3,
     saddle4: saddle4,
-    supportLayout: supportLayout
+    supportLayout: supportLayout,
+    jointPositions: jointPositions,
+    supportPlan: supportPlan
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

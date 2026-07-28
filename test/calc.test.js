@@ -344,6 +344,163 @@ eq('layoutEven と間隔が一致', le2.pitch, sp.span, 1e-9);
 throws('上限0は例外', function () { C.supportLayout(5000, 0, 300); });
 throws('全長0は例外', function () { C.supportLayout(0, 2000, 300); });
 
+console.log('\njointPositions（管の接続点）');
+eq('10m を定尺3.66m で継ぐと2箇所', C.jointPositions(10000, 3660).length, 2);
+eq('1つ目は定尺どおり', C.jointPositions(10000, 3660)[0], 3660);
+eq('2つ目は定尺の2本目', C.jointPositions(10000, 3660)[1], 7320);
+check('全長と同じ位置や外側は入らない',
+  C.jointPositions(7320, 3660).every(function (v) { return v > 0 && v < 7320; }));
+eq('ちょうど定尺2本ぶんの管は継ぎ1箇所', C.jointPositions(7320, 3660).length, 1);
+// 1本目を切って合わせる場合
+var jp = C.jointPositions(10000, 3660, 1500);
+eq('最初の継ぎをずらせる', jp[0], 1500);
+eq('以降は定尺きざみ', jp[1], 1500 + 3660);
+eq('ずらすと本数が変わることがある', jp.length, 3);
+// 個別追加
+var jp2 = C.jointPositions(10000, 3660, null, [500, 9000]);
+eq('個別ぶんと合わせて4箇所', jp2.length, 4);
+eq('昇順に並ぶ（先頭）', jp2[0], 500);
+eq('昇順に並ぶ（末尾）', jp2[3], 9000);
+check('昇順が保たれる', jp2.every(function (v, i) { return i === 0 || v > jp2[i - 1]; }));
+eq('定尺と重なる個別指定は1つにまとまる',
+  C.jointPositions(10000, 3660, null, [3660]).length, 2);
+eq('定尺がなければ個別ぶんだけ',
+  C.jointPositions(6000, null, null, [1500, 3000]).length, 2);
+eq('定尺も個別もなければ空', C.jointPositions(6000, null).length, 0);
+eq('範囲外の個別指定は落ちる',
+  C.jointPositions(6000, null, null, [-100, 0, 6000, 8000]).length, 0);
+throws('全長が数値でなければ例外', function () { C.jointPositions(NaN, 3660); });
+
+console.log('\nsupportPlan（金属管：接続点を避ける）');
+// 接続点も両側支持もなければ、従来の supportLayout と同じ
+var plain = C.supportPlan({ length: 5000, maxSpan: 2000, endMargin: 300 });
+var ref = C.supportLayout(5000, 2000, 300);
+eq('接続点なしなら本数は supportLayout と同じ', plain.count, ref.count);
+check('接続点なしなら位置も supportLayout と同じ', plain.positions.every(function (p, i) {
+  return near(p.x, ref.positions[i], 1e-9);
+}));
+check('接続点なしなら当たりもなし', plain.clashes.length === 0 && plain.ok === true);
+
+// E25・全長10m・定尺3.66m。等間隔だと 300 / 2725 / 5150 / 7575 / 10000-300
+var steel = C.supportPlan({
+  length: 10000, maxSpan: 2000, endMargin: 300,
+  joints: C.jointPositions(10000, 3660),
+  couplingLength: 60, saddleWidth: 25
+});
+eq('必要なあき = (60 + 25) ÷ 2', steel.clear, 42.5);
+check('支持点はすべて上限間隔以内', steel.spans.every(function (v) { return v <= 2000 + 1e-9; }));
+check('両側支持は使っていない', steel.supportAtJoints === false);
+check('すべて等間隔由来', steel.positions.every(function (p) { return p.kind === 'even'; }));
+
+// 接続点のすぐ上に支持点が来る条件を作って、当たりと逃がしを見る
+var hit = C.supportPlan({
+  length: 4000, maxSpan: 2000, endMargin: 300,
+  joints: [2000], couplingLength: 60, saddleWidth: 25
+});
+eq('中央の支持点が接続点と重なる', hit.positions[1].x, 2000);
+eq('当たりが1件', hit.clashes.length, 1);
+eq('当たった相手は接続点2000', hit.clashes[0].joint, 2000);
+check('当たっていれば ok=false', hit.ok === false);
+check('逃がし先が出る', hit.clashes[0].suggest !== null);
+eq('逃がし先は接続点から必要なあきぶん', Math.abs(hit.clashes[0].suggest - 2000), 42.5, 1e-9);
+check('逃がし先は接続点と当たらない',
+  Math.abs(hit.clashes[0].suggest - 2000) >= hit.clear - 1e-9);
+check('逃がしたあとも両隣が上限以内', (function () {
+  var s = hit.clashes[0].suggest;
+  return (s - hit.positions[0].x) <= 2000 + 1e-9 &&
+    (hit.positions[2].x - s) <= 2000 + 1e-9;
+})());
+
+// 当たっていない支持点には逃がし先を付けない
+check('当たっていなければ suggest は null',
+  hit.positions.filter(function (p) { return p.clash === null; })
+    .every(function (p) { return p.suggest === null; }));
+
+// 逃がすと上限を超えてしまう場合は提案しない
+var tight = C.supportPlan({
+  length: 4000, maxSpan: 1000, endMargin: 0,
+  joints: [1000], couplingLength: 2000, saddleWidth: 0
+});
+check('逃がせない場合は suggest が null',
+  tight.clashes.length > 0 && tight.clashes[0].suggest === null);
+
+console.log('\nsupportPlan（樹脂管：接続点の両側に支持）');
+var resin = C.supportPlan({
+  length: 6000, maxSpan: 1500, endMargin: 300,
+  joints: [2000, 4000], couplingLength: 60, saddleWidth: 25,
+  supportAtJoints: true, jointOffset: 150
+});
+eq('接続点から支持までの距離は指定どおり', resin.jointOffset, 150);
+check('両側支持を使っている', resin.supportAtJoints === true);
+check('どの区間も上限以内', resin.spans.every(function (v) { return v <= 1500 + 1e-9; }));
+check('当たりはない', resin.clashes.length === 0 && resin.ok === true);
+eq('1点目は端あきの位置', resin.positions[0].x, 300);
+eq('最終点は反対の端あきの位置', resin.positions[resin.positions.length - 1].x, 5700);
+// 各接続点の両側に支持があるか
+[2000, 4000].forEach(function (j) {
+  check(j + 'mm の接続点の手前側に支持がある', resin.positions.some(function (p) {
+    return p.kind === 'joint' && near(p.x, j - resin.jointOffset, 1e-6);
+  }));
+  check(j + 'mm の接続点の先側に支持がある', resin.positions.some(function (p) {
+    return p.kind === 'joint' && near(p.x, j + resin.jointOffset, 1e-6);
+  }));
+});
+// 指定した距離がカップリングに当たるなら、当たらない位置まで広げる
+var narrow = C.supportPlan({
+  length: 6000, maxSpan: 1500, endMargin: 300,
+  joints: [3000], couplingLength: 200, saddleWidth: 50,
+  supportAtJoints: true, jointOffset: 10
+});
+eq('狭すぎる指定は必要なあきまで広がる', narrow.jointOffset, narrow.clear);
+eq('その必要なあきは (200 + 50) ÷ 2', narrow.clear, 125);
+check('広げた結果カップリングと当たらない', narrow.positions.every(function (p) {
+  return Math.abs(p.x - 3000) >= narrow.clear - 1e-9;
+}));
+check('接続点由来の支持はどれも接続点と当たらない', resin.positions.every(function (p) {
+  return [2000, 4000].every(function (j) {
+    return Math.abs(p.x - j) >= resin.clear - 1e-9;
+  });
+}));
+check('埋めた支持点は fill として区別される',
+  resin.positions.some(function (p) { return p.kind === 'fill'; }));
+
+// 接続点が近すぎると、両側の支持が重なるので1つにまとまる
+var close = C.supportPlan({
+  length: 6000, maxSpan: 1500, endMargin: 300,
+  joints: [3000, 3050], couplingLength: 60, saddleWidth: 25,
+  supportAtJoints: true
+});
+check('近い接続点でも支持が重ならない', close.positions.every(function (p, i) {
+  return i === 0 || p.x - close.positions[i - 1].x > 1;
+}));
+check('近い接続点でも上限以内', close.spans.every(function (v) { return v <= 1500 + 1e-9; }));
+
+// 接続点が端に寄っていても端あきの内側に収まる
+var edge = C.supportPlan({
+  length: 6000, maxSpan: 1500, endMargin: 300,
+  joints: [100, 5950], couplingLength: 60, saddleWidth: 25,
+  supportAtJoints: true
+});
+check('端に寄った接続点でも端あきの内側', edge.positions.every(function (p) {
+  return p.x >= 300 - 1e-9 && p.x <= 5700 + 1e-9;
+}));
+
+// 両側支持を切れば、接続点があっても等間隔のまま
+var off2 = C.supportPlan({
+  length: 6000, maxSpan: 1500, endMargin: 300,
+  joints: [2000, 4000], couplingLength: 60, saddleWidth: 25,
+  supportAtJoints: false
+});
+check('両側支持を切ると等間隔由来だけになる',
+  off2.positions.every(function (p) { return p.kind === 'even'; }));
+eq('両側支持を切ると supportLayout と同じ本数',
+  off2.count, C.supportLayout(6000, 1500, 300).count);
+
+throws('上限0は例外',
+  function () { C.supportPlan({ length: 5000, maxSpan: 0, endMargin: 300 }); });
+throws('全長が数値でなければ例外',
+  function () { C.supportPlan({ length: NaN, maxSpan: 2000, endMargin: 300 }); });
+
 console.log('\n支持点の基準（寸法データ側）');
 check('全シリーズに材質と支持点間隔の上限がある', D.PIPE_SERIES.every(function (s) {
   return (s.material === '鋼' || s.material === '樹脂') && s.maxSupportSpan > 0;
