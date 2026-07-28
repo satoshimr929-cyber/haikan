@@ -113,13 +113,21 @@
     var x = function (mm) { return offX + mm * s; };
     var out = [];
 
+    // 芯どうしが詰まっていると管のラベルが重なるので、その場合は端だけに振る
+    var minStep = Infinity;
+    for (var n = 1; n < items.length; n++) {
+      minStep = Math.min(minStep, (items[n].center - items[n - 1].center) * s);
+    }
+    var showAll = items.length < 2 || minStep >= 24;
+    var last = items.length - 1;
+
     out.push('<svg viewBox="0 0 ' + W + ' ' + Math.round(H) + '" role="img" aria-label="配管の配置図">');
 
     // 取り付け面（ラック / 壁）
     out.push('<line class="rail" x1="' + x(0) + '" y1="' + railY +
       '" x2="' + x(totalWidth) + '" y2="' + railY + '"/>');
 
-    items.forEach(function (it) {
+    items.forEach(function (it, i) {
       var r = (it.od * s) / 2;
       var cx = x(it.center);
       var cy = railY - r;
@@ -128,8 +136,10 @@
       // 芯の位置を示す一点鎖線
       out.push('<line class="cl" x1="' + cx.toFixed(1) + '" y1="' + (cy - r - 6).toFixed(1) +
         '" x2="' + cx.toFixed(1) + '" y2="' + (dimY + 6) + '"/>');
-      out.push('<text class="strong" x="' + cx.toFixed(1) + '" y="' + yLabel +
-        '" text-anchor="middle">' + esc(it.label) + '</text>');
+      if (showAll || i === 0 || i === last) {
+        out.push('<text class="strong" x="' + cx.toFixed(1) + '" y="' + yLabel +
+          '" text-anchor="middle">' + esc(it.label) + '</text>');
+      }
     });
 
     (dims || []).forEach(function (d) {
@@ -156,20 +166,25 @@
    * 曲げの内側になる管ほど曲げ位置が手前になり、そのずれが stagger。
    * 1本目を内側（図の上）に置き、外側へ向かって順に曲げ位置をずらして描く。
    */
-  function staggerSVG(count, pitch, angleDeg, stagger) {
+  function staggerSVG(count, pitch, angleDeg, stagger, pitchAfter) {
     if (!(count >= 2) || !(pitch > 0) || !isFinite(stagger)) return '';
 
     var t = angleDeg * Math.PI / 180;
     var cos = Math.cos(t), sin = Math.sin(t);
-    var leadIn = Math.max(pitch * 1.4, stagger * 1.2, 40); // 曲げ手前の直線部
-    var leadOut = Math.max(pitch * 1.6, 60);               // 曲げた先の直線部
+    var leadIn = Math.max(pitch * 1.4, Math.abs(stagger) * 1.2, 40); // 曲げ手前の直線部
+    var leadOut = Math.max(Math.max(pitch, pitchAfter) * 1.6, 60);   // 曲げた先の直線部
 
-    // モデル座標（mm・y は下向き）で各管の 始点／曲げ位置／終点 を出す
+    // モデル座標（mm・y は下向き）で各管の 始点／曲げ位置／終点 を出す。
+    // ずらし量は負にもなるので、いちばん手前の曲げ位置から直線部を取る。
+    var i, vxs = [];
+    for (i = 0; i < count; i++) vxs.push(i * stagger);
+    var startX = Math.min.apply(null, vxs) - leadIn;
+
     var pipes = [];
-    for (var i = 0; i < count; i++) {
-      var vxi = leadIn + i * stagger, vyi = i * pitch;
+    for (i = 0; i < count; i++) {
+      var vxi = vxs[i], vyi = i * pitch;
       pipes.push({
-        start: [0, vyi],
+        start: [startX, vyi],
         vertex: [vxi, vyi],
         end: [vxi + leadOut * cos, vyi - leadOut * sin]
       });
@@ -209,6 +224,11 @@
       '" x2="' + X(pipes[count - 1].vertex[0]).toFixed(1) +
       '" y2="' + Y(pipes[count - 1].vertex[1]).toFixed(1) + '"/>');
 
+    // 管の間隔が文字の高さより狭いと番号が重なるので、その場合は端だけに振る
+    var step = pitch * s;
+    var showAll = step >= 20;
+    var showEnds = (count - 1) * step >= 20;
+
     pipes.forEach(function (p, i) {
       o.push('<polyline class="pipe-line" points="' +
         [p.start, p.vertex, p.end].map(function (q) {
@@ -216,9 +236,11 @@
         }).join(' ') + '"/>');
       o.push('<circle class="vertex" cx="' + X(p.vertex[0]).toFixed(1) +
         '" cy="' + Y(p.vertex[1]).toFixed(1) + '" r="3"/>');
-      o.push('<text class="strong" x="' + (X(p.start[0]) - 6).toFixed(1) +
-        '" y="' + (Y(p.start[1]) + 4).toFixed(1) + '" text-anchor="end">' +
-        (i + 1) + '</text>');
+      if (showAll || (showEnds ? (i === 0 || i === count - 1) : i === 0)) {
+        o.push('<text class="strong" x="' + (X(p.start[0]) - 6).toFixed(1) +
+          '" y="' + (Y(p.start[1]) + 4).toFixed(1) + '" text-anchor="end">' +
+          (i + 1) + '</text>');
+      }
       // 曲げ位置から下の寸法線へ落とす引き出し線
       o.push('<line class="cl" x1="' + X(p.vertex[0]).toFixed(1) +
         '" y1="' + Y(p.vertex[1]).toFixed(1) +
@@ -239,8 +261,8 @@
     o.push('<text x="' + aLabelX.toFixed(1) + '" y="' + aLabelY.toFixed(1) +
       '" text-anchor="middle">' + fmt(angleDeg) + '°</text>');
 
-    // ピッチ（1本目と2本目の直線部のあいだ）
-    var px = X(0) + Math.min(26, leadIn * s * 0.4);
+    // 手前のピッチ（1本目と2本目の直線部のあいだ）
+    var px = X(startX) + Math.min(26, leadIn * s * 0.4);
     o.push('<line class="dim" x1="' + px.toFixed(1) + '" y1="' + Y(0).toFixed(1) +
       '" x2="' + px.toFixed(1) + '" y2="' + Y(pitch).toFixed(1) + '"/>');
     [0, pitch].forEach(function (y) {
@@ -250,6 +272,26 @@
     if (pitch * s > 34) {
       o.push('<text x="' + (px + 6).toFixed(1) + '" y="' + (Y(pitch / 2) + 4).toFixed(1) +
         '">' + fmt(pitch) + '</text>');
+    }
+
+    // 曲げた先のピッチ。曲げた先の直線部に直交する向きで引く
+    var d = leadOut * 0.72;
+    var a0 = [pipes[0].vertex[0] + d * cos, pipes[0].vertex[1] - d * sin];
+    var a1 = [a0[0] + pitchAfter * sin, a0[1] + pitchAfter * cos];
+    o.push('<line class="dim" x1="' + X(a0[0]).toFixed(1) + '" y1="' + Y(a0[1]).toFixed(1) +
+      '" x2="' + X(a1[0]).toFixed(1) + '" y2="' + Y(a1[1]).toFixed(1) + '"/>');
+    [a0, a1].forEach(function (q) {
+      // 寸法線と直角に、短い矢羽根を付ける
+      o.push('<line class="dim" x1="' + (X(q[0]) - 4 * cos).toFixed(1) +
+        '" y1="' + (Y(q[1]) + 4 * sin).toFixed(1) +
+        '" x2="' + (X(q[0]) + 4 * cos).toFixed(1) +
+        '" y2="' + (Y(q[1]) - 4 * sin).toFixed(1) + '"/>');
+    });
+    if (pitchAfter * s > 34) {
+      var mid = [(a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2];
+      o.push('<text x="' + (X(mid[0]) + 11 * cos).toFixed(1) +
+        '" y="' + (Y(mid[1]) - 11 * sin + 4).toFixed(1) +
+        '" text-anchor="middle">' + fmt(pitchAfter) + '</text>');
     }
 
     // 下側：曲げ位置のずれ
@@ -670,7 +712,8 @@
   /* --------------------------------------------- モード4：曲げのずらし */
 
   var stag = {
-    pitch: $('#stag-pitch'), angle: $('#stag-angle'), count: $('#stag-count'),
+    pitch: $('#stag-pitch'), pitch2: $('#stag-pitch2'),
+    angle: $('#stag-angle'), count: $('#stag-count'),
     result: $('#stag-result'), figure: $('#stag-figure'),
     marks: $('#stag-marks'), quick: $('#stag-quick')
   };
@@ -679,27 +722,47 @@
     var pitch = parseFloat(stag.pitch.value);
     var angle = parseFloat(stag.angle.value);
     var count = parseInt(stag.count.value, 10);
+    // 空欄なら「手前と同じ」。プレースホルダにも手前の値を出しておく
+    stag.pitch2.placeholder = isFinite(pitch) ? '手前と同じ（' + fmt(pitch) + '）' : '手前と同じ';
+    var after = stag.pitch2.value === '' ? undefined : parseFloat(stag.pitch2.value);
+
     var r;
     try {
-      r = C.parallelStagger(pitch, angle);
+      r = C.parallelStagger(pitch, angle, after);
     } catch (e) {
       stag.result.innerHTML = msg(e.message, 'warn');
       stag.figure.innerHTML = ''; stag.marks.innerHTML = '';
       return;
     }
     if (!(count >= 2)) count = 2;
+    var same = r.pitchAfter === r.pitch;
 
     var html = big('隣の管とのずらし量', fmt(r.stagger), 'mm');
     html += kv([
-      ['芯々ピッチ', fmt(pitch) + ' mm'],
+      ['手前のピッチ', fmt(r.pitch) + ' mm'],
+      ['曲げた先のピッチ', fmt(r.pitchAfter) + ' mm' + (same ? '（手前と同じ）' : '')],
       ['曲げ角度', fmt(angle) + ' °'],
       ['本数', count + ' 本'],
       ['端から端の合計', fmt(r.stagger * (count - 1)) + ' mm']
     ]);
-    html += msg('曲げの内側になる管ほど曲げ位置が手前になります。1本目を基準に、外側へ向かって順に足していってください。', '');
+
+    if (r.stagger > 0) {
+      html += msg('曲げの内側になる管ほど曲げ位置が手前になります。' +
+        '1本目を基準に、外側へ向かって順に足していってください。', '');
+    } else if (r.stagger < 0) {
+      html += msg('ずらし量がマイナスです。曲げの外側になる管のほうが手前で曲がります。' +
+        '1本目を基準に、外側へ向かって順に手前へ戻してください。', 'warn');
+    } else {
+      html += msg('ずらし量が 0 です。どの管も同じ位置で曲げます。', '');
+    }
+    if (!same) {
+      html += msg('曲げ角度はどの管も ' + fmt(angle) + '° のままで、' +
+        '曲げ位置のずらし方だけでピッチを ' + fmt(r.pitch) + 'mm から ' +
+        fmt(r.pitchAfter) + 'mm に変えています。', '');
+    }
     stag.result.innerHTML = html;
 
-    stag.figure.innerHTML = staggerSVG(count, pitch, angle, r.stagger);
+    stag.figure.innerHTML = staggerSVG(count, pitch, angle, r.stagger, r.pitchAfter);
 
     var rows = '';
     for (var i = 0; i < count; i++) {
@@ -817,7 +880,7 @@
     bind([even.pipe, even.pipeOd, even.width, even.margin, even.mode,
       even.gap, even.count, even.pitch], renderEven);
     bind([mixed.mode, mixed.gap, mixed.width, mixed.margin], renderMixed);
-    bind([stag.pitch, stag.angle, stag.count], renderStagger);
+    bind([stag.pitch, stag.pitch2, stag.angle, stag.count], renderStagger);
     bind([tbl.series, tbl.search], renderTable);
 
     // 混在モードは行が動的なので、リスト全体で拾う
