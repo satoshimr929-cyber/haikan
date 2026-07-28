@@ -298,6 +298,165 @@
     };
   }
 
+  /* ------------------------------------------------------------ 曲げ加工
+   * どれも「曲げ半径のない、折れ線としての曲げ」を前提にした式です。
+   * 実際のベンダーは曲げ半径のぶんだけ差が出るので、墨は現物合わせで
+   * 微調整する前提の目安として使ってください（bendMarks だけは半径を扱います）。 */
+
+  function checkAngle(angleDeg, label) {
+    req(angleDeg, label || '曲げ角度');
+    if (angleDeg <= 0 || angleDeg >= 90) {
+      throw new Error((label || '曲げ角度') + 'は0〜90°の間で入力してください');
+    }
+    return angleDeg * DEG;
+  }
+
+  /**
+   * オフセット（振り）。段差 rise を角度 angleDeg の2箇所曲げで越える。
+   * 斜辺 = 段差 ÷ sinθ、水平投影 = 段差 ÷ tanθ、
+   * 縮み代 = 斜辺 − 水平投影 = 段差 × tan(θ/2)
+   * @returns {{rise, angle, travel, run, shrink, multiplier}}
+   */
+  function offset(rise, angleDeg) {
+    req(rise, '段差');
+    var t = checkAngle(angleDeg);
+    var travel = rise / Math.sin(t);
+    var run = rise / Math.tan(t);
+    return {
+      rise: rise,
+      angle: angleDeg,
+      travel: travel,        // 曲げと曲げのあいだの管の長さ（墨の間隔）
+      run: run,              // 走り方向に進む距離
+      shrink: travel - run,  // = rise × tan(θ/2)
+      multiplier: 1 / Math.sin(t)
+    };
+  }
+
+  /**
+   * 曲げ半径のある1箇所の曲げ。legA・legB は交点（曲げなければ角になる点）
+   * から管端までの外寸。
+   * 接点まで = R × tan(θ/2)、円弧長 = R × θ、取り代 = 接点×2 − 円弧長
+   * @returns {{tangent, arc, takeup, developed, markStart, markEnd}}
+   */
+  function bendMarks(legA, legB, radius, angleDeg) {
+    req(legA, '外寸A'); req(legB, '外寸B'); req(radius, '曲げ半径');
+    req(angleDeg, '曲げ角度');
+    if (radius <= 0) throw new Error('曲げ半径は0より大きい値を入力してください');
+    if (angleDeg <= 0 || angleDeg >= 180) {
+      throw new Error('曲げ角度は0〜180°の間で入力してください');
+    }
+    var t = angleDeg * DEG;
+    var tangent = radius * Math.tan(t / 2);
+    var arc = radius * t;
+    var takeup = 2 * tangent - arc;
+    return {
+      legA: legA, legB: legB, radius: radius, angle: angleDeg,
+      tangent: tangent,             // 交点から曲げ始めまで
+      arc: arc,                     // 曲げている部分の長さ
+      takeup: takeup,               // 外寸の合計より短くなる量
+      developed: legA + legB - takeup, // 切断長（展開長）
+      markStart: legA - tangent,    // 管端Aから曲げ始めの墨まで
+      markEnd: legA - tangent + arc, // 管端Aから曲げ終わりの墨まで
+      fits: legA >= tangent && legB >= tangent
+    };
+  }
+
+  /**
+   * 内線規程の「曲げの内側の半径は管内径の6倍以上」から最小曲げ半径を出す。
+   * @returns {{inner, center, factor}} inner=内側半径 / center=芯の半径
+   */
+  function minBendRadius(innerDia, outerDia, factor) {
+    req(innerDia, '内径'); req(outerDia, '外径');
+    var f = (factor === undefined || factor === null) ? 6 : req(factor, '倍率');
+    var inner = innerDia * f;
+    return { inner: inner, center: inner + outerDia / 2, factor: f };
+  }
+
+  /**
+   * 3方曲げ（センターサドル）。障害物の高さ height を、中央 2θ・両側 θ で越える。
+   * 中央の墨から両側の墨まで = 高さ ÷ sinθ、縮み代 = 高さ × tan(θ/2) × 2
+   * @returns {{sideAngle, centerAngle, markSpacing, shrink, run}}
+   */
+  function saddle3(height, angleDeg) {
+    req(height, '障害物の高さ');
+    var t = checkAngle(angleDeg, '側面の曲げ角度');
+    var spacing = height / Math.sin(t);
+    var run = height / Math.tan(t);
+    return {
+      height: height,
+      angle: angleDeg,             // saddle4 と形をそろえる（= sideAngle）
+      sideAngle: angleDeg,
+      centerAngle: angleDeg * 2,
+      markSpacing: spacing,        // 中央の墨から片側の墨まで
+      shrink: (spacing - run) * 2, // = 高さ × tan(θ/2) × 2
+      run: run
+    };
+  }
+
+  /**
+   * 4方曲げ。障害物の高さ height・幅 width を、両側 θ の4箇所曲げで越える。
+   * 上を通る直線部は 幅 + 逃げ×2。縮み代は3方曲げと同じ。
+   * @returns {{marks:number[], spans:number[], topRun, shrink, total}}
+   */
+  function saddle4(height, width, angleDeg, clearance) {
+    req(height, '障害物の高さ'); req(width, '障害物の幅');
+    var c = (clearance === undefined || clearance === null) ? 0 : req(clearance, '逃げ');
+    var t = checkAngle(angleDeg);
+    var rise = height / Math.sin(t);
+    var topRun = width + c * 2;
+    var spans = [rise, topRun, rise];
+
+    // 1つ目の墨を0として、そこからの累計で墨位置を出す
+    var marks = [0];
+    spans.forEach(function (v) { marks.push(marks[marks.length - 1] + v); });
+
+    return {
+      height: height, width: width, angle: angleDeg, clearance: c,
+      marks: marks,
+      spans: spans,
+      topRun: topRun,
+      shrink: (rise - height / Math.tan(t)) * 2,
+      total: marks[marks.length - 1]
+    };
+  }
+
+  /**
+   * 支持点（サドル）の割り付け。全長 length の管を、上限間隔 maxSpan 以下、
+   * 両端から endMargin の位置に支持点を置いて等間隔で割る。
+   * layoutEven と同じ「両端に余白を取って等間隔で割る」形だが、
+   * 本数を指定するのではなく上限間隔から決める点が違う。
+   * @returns {{count, span, positions:number[], ok}}
+   */
+  function supportLayout(length, maxSpan, endMargin) {
+    req(length, '配管の全長'); req(maxSpan, '支持点間隔の上限');
+    req(endMargin, '端からの距離');
+    if (maxSpan <= 0) throw new Error('支持点間隔の上限は0より大きい値を入力してください');
+    if (length <= 0) throw new Error('配管の全長は0より大きい値を入力してください');
+
+    var usable = length - 2 * endMargin;
+    if (usable <= 0) {
+      // 端あきを取ると場所が残らない短い管。両端1点ずつで見る
+      return {
+        count: 2, span: Math.max(length, 0),
+        positions: [0, length], usable: usable,
+        ok: length <= maxSpan
+      };
+    }
+
+    var count = Math.max(2, Math.ceil(usable / maxSpan) + 1);
+    var span = usable / (count - 1);
+    var positions = [];
+    for (var i = 0; i < count; i++) positions.push(endMargin + i * span);
+
+    return {
+      count: count,
+      span: span,
+      positions: positions,
+      usable: usable,
+      ok: span <= maxSpan + 1e-9
+    };
+  }
+
   var api = {
     centerPitch: centerPitch,
     clearanceFromPitch: clearanceFromPitch,
@@ -309,7 +468,13 @@
     layoutMixedSpecs: layoutMixedSpecs,
     gapForWidth: gapForWidth,
     layoutMixedInWidth: layoutMixedInWidth,
-    parallelStagger: parallelStagger
+    parallelStagger: parallelStagger,
+    offset: offset,
+    bendMarks: bendMarks,
+    minBendRadius: minBendRadius,
+    saddle3: saddle3,
+    saddle4: saddle4,
+    supportLayout: supportLayout
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

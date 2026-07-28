@@ -77,6 +77,7 @@ body {
   padding: 10px 6px;
   border-bottom: 2px solid transparent;
   cursor: pointer;
+  white-space: nowrap;
 }
 .tab.is-active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
 
@@ -369,4 +370,6 @@ td .code {
   .field-row { gap: 8px; }
   table { font-size: .82rem; }
   th, td { padding: 7px 5px; }
+  /* タブが3つあるので、狭い画面では折り返さないところまで詰める */
+  .tab { font-size: .82rem; padding: 10px 2px; }
 }

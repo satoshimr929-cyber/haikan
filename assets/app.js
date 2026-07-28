@@ -4,6 +4,7 @@
 
   var D = window.HaikanData;
   var C = window.HaikanCalc;
+  var F = window.HaikanFigures;
 
   var $ = function (sel, ctx) { return (ctx || document).querySelector(sel); };
   var $$ = function (sel, ctx) {
@@ -12,18 +13,9 @@
 
   /* ---------------------------------------------------------------- 共通 */
 
-  /** 小数1桁に丸めて、末尾の .0 は落とす */
-  function fmt(n) {
-    if (n === null || n === undefined || !isFinite(n)) return '—';
-    var r = Math.round(n * 10) / 10;
-    return String(r);
-  }
-
-  function esc(s) {
-    return String(s).replace(/[&<>"]/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
-    });
-  }
+  // 数値の整形と HTML エスケープは図の組み立てと共通なので figures.js のものを使う
+  var fmt = F.fmt;
+  var esc = F.esc;
 
   function big(label, value, unit) {
     return '<div class="big"><span class="label">' + esc(label) + '</span>' +
@@ -79,246 +71,6 @@
     return { od: size.od, label: size.label, size: size };
   }
 
-  /* ------------------------------------------------------------ 図の描画 */
-
-  /* 図の文字は CSS 側で 12px / 狭い画面では 17px に変わる。JS からは実際の
-   * 大きさが分からないので、余白はつねに大きいほうに合わせて確保する。
-   * LABEL_DROP = 寸法線からラベルのベースラインまで
-   * LABEL_ROOM = ラベルのベースラインから図の下端まで */
-  var LABEL_DROP = 20;
-  var LABEL_ROOM = 10;
-  /* 17px の文字が上端で切れないベースラインの下限（アセンダぶんの余裕） */
-  var LABEL_TOP = 20;
-
-  /**
-   * 配管の断面を横一列に描く。
-   * items: [{center, od, label}]（center は左端 0 基準の mm）
-   * dims:  [{from, to, label}]（mm 座標での寸法線）
-   */
-  function layoutSVG(items, totalWidth, dims) {
-    if (!items.length || !(totalWidth > 0)) return '';
-
-    var W = 600, PAD = 24;
-    var maxOd = Math.max.apply(null, items.map(function (i) { return i.od; }));
-
-    // 本数が少ないと引き伸ばされて図が縦に間延びするので、管の直径に上限をかける
-    var s = Math.min((W - PAD * 2) / totalWidth, 120 / maxOd);
-    var offX = (W - totalWidth * s) / 2;
-
-    var yLabel = LABEL_TOP;
-    var railY = yLabel + 10 + maxOd * s;
-    var dimY = railY + 26;
-    var H = dimY + LABEL_DROP + LABEL_ROOM;
-
-    var x = function (mm) { return offX + mm * s; };
-    var out = [];
-
-    // 芯どうしが詰まっていると管のラベルが重なるので、その場合は端だけに振る
-    var minStep = Infinity;
-    for (var n = 1; n < items.length; n++) {
-      minStep = Math.min(minStep, (items[n].center - items[n - 1].center) * s);
-    }
-    var showAll = items.length < 2 || minStep >= 24;
-    var last = items.length - 1;
-
-    out.push('<svg viewBox="0 0 ' + W + ' ' + Math.round(H) + '" role="img" aria-label="配管の配置図">');
-
-    // 取り付け面（ラック / 壁）
-    out.push('<line class="rail" x1="' + x(0) + '" y1="' + railY +
-      '" x2="' + x(totalWidth) + '" y2="' + railY + '"/>');
-
-    items.forEach(function (it, i) {
-      var r = (it.od * s) / 2;
-      var cx = x(it.center);
-      var cy = railY - r;
-      out.push('<circle class="pipe-fill" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) +
-        '" r="' + Math.max(r, 2).toFixed(1) + '"/>');
-      // 芯の位置を示す一点鎖線
-      out.push('<line class="cl" x1="' + cx.toFixed(1) + '" y1="' + (cy - r - 6).toFixed(1) +
-        '" x2="' + cx.toFixed(1) + '" y2="' + (dimY + 6) + '"/>');
-      if (showAll || i === 0 || i === last) {
-        out.push('<text class="strong" x="' + cx.toFixed(1) + '" y="' + yLabel +
-          '" text-anchor="middle">' + esc(it.label) + '</text>');
-      }
-    });
-
-    (dims || []).forEach(function (d) {
-      var x1 = x(d.from), x2 = x(d.to);
-      out.push('<line class="dim" x1="' + x1.toFixed(1) + '" y1="' + dimY +
-        '" x2="' + x2.toFixed(1) + '" y2="' + dimY + '"/>');
-      [x1, x2].forEach(function (px) {
-        out.push('<line class="dim" x1="' + px.toFixed(1) + '" y1="' + (dimY - 5) +
-          '" x2="' + px.toFixed(1) + '" y2="' + (dimY + 5) + '"/>');
-      });
-      // 幅が狭いラベルは省略して重なりを避ける
-      if (Math.abs(x2 - x1) > 30) {
-        out.push('<text x="' + ((x1 + x2) / 2).toFixed(1) + '" y="' + (dimY + LABEL_DROP) +
-          '" text-anchor="middle">' + esc(d.label) + '</text>');
-      }
-    });
-
-    out.push('</svg>');
-    return out.join('');
-  }
-
-  /**
-   * 並行配管を同じ角度で曲げたところを真上から見た図。
-   * 曲げの内側になる管ほど曲げ位置が手前になり、そのずれが stagger。
-   * 1本目を内側（図の上）に置き、外側へ向かって順に曲げ位置をずらして描く。
-   */
-  function staggerSVG(count, pitch, angleDeg, stagger, pitchAfter) {
-    if (!(count >= 2) || !(pitch > 0) || !isFinite(stagger)) return '';
-
-    var t = angleDeg * Math.PI / 180;
-    var cos = Math.cos(t), sin = Math.sin(t);
-    var leadIn = Math.max(pitch * 1.4, Math.abs(stagger) * 1.2, 40); // 曲げ手前の直線部
-    var leadOut = Math.max(Math.max(pitch, pitchAfter) * 1.6, 60);   // 曲げた先の直線部
-
-    // モデル座標（mm・y は下向き）で各管の 始点／曲げ位置／終点 を出す。
-    // ずらし量は負にもなるので、いちばん手前の曲げ位置から直線部を取る。
-    var i, vxs = [];
-    for (i = 0; i < count; i++) vxs.push(i * stagger);
-    var startX = Math.min.apply(null, vxs) - leadIn;
-
-    var pipes = [];
-    for (i = 0; i < count; i++) {
-      var vxi = vxs[i], vyi = i * pitch;
-      pipes.push({
-        start: [startX, vyi],
-        vertex: [vxi, vyi],
-        end: [vxi + leadOut * cos, vyi - leadOut * sin]
-      });
-    }
-
-    // 角度によっては曲げた先が左へ戻るので、実際の範囲から囲みを取る
-    var xs = [], ys = [];
-    pipes.forEach(function (p) {
-      [p.start, p.vertex, p.end].forEach(function (q) { xs.push(q[0]); ys.push(q[1]); });
-    });
-    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
-    var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
-    var bw = maxX - minX, bh = maxY - minY;
-    if (!(bw > 0) || !(bh > 0)) return '';
-
-    var W = 600, PADL = 36, PADR = 22, TOP = LABEL_TOP, MAXH = 420;
-    var DIM = 18 + LABEL_DROP + LABEL_ROOM; // 寸法線の位置 + ラベル + 下の余白
-    var inner = W - PADL - PADR;
-    // まず幅いっぱいに広げ、縦に間延びしすぎる形だけ高さで頭打ちにする
-    var s = inner / bw;
-    if (TOP + bh * s + DIM > MAXH) s = (MAXH - TOP - DIM) / bh;
-    var offX = PADL + (inner - bw * s) / 2;
-    var X = function (x) { return offX + (x - minX) * s; };
-    var Y = function (y) { return TOP + (y - minY) * s; };
-
-    var drawH = bh * s;
-    var dimY = TOP + drawH + 18;
-    var H = TOP + drawH + DIM;
-    var o = [];
-
-    o.push('<svg viewBox="0 0 ' + W + ' ' + Math.round(H) +
-      '" role="img" aria-label="並行配管の曲げ位置をずらした図">');
-
-    // 曲げ位置を結ぶ線。まっすぐ並ばずに斜めに流れることが見てとれる
-    o.push('<line class="ghost" x1="' + X(pipes[0].vertex[0]).toFixed(1) +
-      '" y1="' + Y(pipes[0].vertex[1]).toFixed(1) +
-      '" x2="' + X(pipes[count - 1].vertex[0]).toFixed(1) +
-      '" y2="' + Y(pipes[count - 1].vertex[1]).toFixed(1) + '"/>');
-
-    // 管の間隔が文字の高さより狭いと番号が重なるので、その場合は端だけに振る
-    var step = pitch * s;
-    var showAll = step >= 20;
-    var showEnds = (count - 1) * step >= 20;
-
-    pipes.forEach(function (p, i) {
-      o.push('<polyline class="pipe-line" points="' +
-        [p.start, p.vertex, p.end].map(function (q) {
-          return X(q[0]).toFixed(1) + ',' + Y(q[1]).toFixed(1);
-        }).join(' ') + '"/>');
-      o.push('<circle class="vertex" cx="' + X(p.vertex[0]).toFixed(1) +
-        '" cy="' + Y(p.vertex[1]).toFixed(1) + '" r="3"/>');
-      if (showAll || (showEnds ? (i === 0 || i === count - 1) : i === 0)) {
-        o.push('<text class="strong" x="' + (X(p.start[0]) - 6).toFixed(1) +
-          '" y="' + (Y(p.start[1]) + 4).toFixed(1) + '" text-anchor="end">' +
-          (i + 1) + '</text>');
-      }
-      // 曲げ位置から下の寸法線へ落とす引き出し線
-      o.push('<line class="cl" x1="' + X(p.vertex[0]).toFixed(1) +
-        '" y1="' + Y(p.vertex[1]).toFixed(1) +
-        '" x2="' + X(p.vertex[0]).toFixed(1) + '" y2="' + (dimY + 6) + '"/>');
-    });
-
-    // 曲げずにまっすぐ進んだ場合の線と、そこからの振れ角
-    var v0 = pipes[0].vertex;
-    var r = 26;
-    o.push('<line class="ghost" x1="' + X(v0[0]).toFixed(1) + '" y1="' + Y(v0[1]).toFixed(1) +
-      '" x2="' + (X(v0[0]) + r * 1.7).toFixed(1) + '" y2="' + Y(v0[1]).toFixed(1) + '"/>');
-    o.push('<path class="dim" fill="none" d="M ' + (X(v0[0]) + r).toFixed(1) + ' ' +
-      Y(v0[1]).toFixed(1) + ' A ' + r + ' ' + r + ' 0 ' + (angleDeg > 180 ? 1 : 0) + ' 0 ' +
-      (X(v0[0]) + r * cos).toFixed(1) + ' ' + (Y(v0[1]) - r * sin).toFixed(1) + '"/>');
-    // 角度が大きいと図の外へ出るので、内側に収まる位置まで戻す
-    var aLabelX = Math.min(W - PADR - 14, X(v0[0]) + (r + 13) * Math.cos(t / 2));
-    var aLabelY = Math.max(LABEL_TOP, Y(v0[1]) - (r + 13) * Math.sin(t / 2) + 4);
-    o.push('<text x="' + aLabelX.toFixed(1) + '" y="' + aLabelY.toFixed(1) +
-      '" text-anchor="middle">' + fmt(angleDeg) + '°</text>');
-
-    // 手前のピッチ（1本目と2本目の直線部のあいだ）
-    var px = X(startX) + Math.min(26, leadIn * s * 0.4);
-    o.push('<line class="dim" x1="' + px.toFixed(1) + '" y1="' + Y(0).toFixed(1) +
-      '" x2="' + px.toFixed(1) + '" y2="' + Y(pitch).toFixed(1) + '"/>');
-    [0, pitch].forEach(function (y) {
-      o.push('<line class="dim" x1="' + (px - 4).toFixed(1) + '" y1="' + Y(y).toFixed(1) +
-        '" x2="' + (px + 4).toFixed(1) + '" y2="' + Y(y).toFixed(1) + '"/>');
-    });
-    if (pitch * s > 34) {
-      o.push('<text x="' + (px + 6).toFixed(1) + '" y="' + (Y(pitch / 2) + 4).toFixed(1) +
-        '">' + fmt(pitch) + '</text>');
-    }
-
-    // 曲げた先のピッチ。曲げた先の直線部に直交する向きで引く
-    var d = leadOut * 0.72;
-    var a0 = [pipes[0].vertex[0] + d * cos, pipes[0].vertex[1] - d * sin];
-    var a1 = [a0[0] + pitchAfter * sin, a0[1] + pitchAfter * cos];
-    o.push('<line class="dim" x1="' + X(a0[0]).toFixed(1) + '" y1="' + Y(a0[1]).toFixed(1) +
-      '" x2="' + X(a1[0]).toFixed(1) + '" y2="' + Y(a1[1]).toFixed(1) + '"/>');
-    [a0, a1].forEach(function (q) {
-      // 寸法線と直角に、短い矢羽根を付ける
-      o.push('<line class="dim" x1="' + (X(q[0]) - 4 * cos).toFixed(1) +
-        '" y1="' + (Y(q[1]) + 4 * sin).toFixed(1) +
-        '" x2="' + (X(q[0]) + 4 * cos).toFixed(1) +
-        '" y2="' + (Y(q[1]) - 4 * sin).toFixed(1) + '"/>');
-    });
-    if (pitchAfter * s > 34) {
-      var mid = [(a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2];
-      o.push('<text x="' + (X(mid[0]) + 11 * cos).toFixed(1) +
-        '" y="' + (Y(mid[1]) - 11 * sin + 4).toFixed(1) +
-        '" text-anchor="middle">' + fmt(pitchAfter) + '</text>');
-    }
-
-    // 下側：曲げ位置のずれ
-    o.push('<line class="dim" x1="' + X(pipes[0].vertex[0]).toFixed(1) + '" y1="' + dimY +
-      '" x2="' + X(pipes[count - 1].vertex[0]).toFixed(1) + '" y2="' + dimY + '"/>');
-    pipes.forEach(function (p) {
-      o.push('<line class="dim" x1="' + X(p.vertex[0]).toFixed(1) + '" y1="' + (dimY - 5) +
-        '" x2="' + X(p.vertex[0]).toFixed(1) + '" y2="' + (dimY + 5) + '"/>');
-    });
-    var segW = (X(pipes[count - 1].vertex[0]) - X(pipes[0].vertex[0])) / (count - 1);
-    if (segW > 44) {
-      for (var k = 1; k < count; k++) {
-        var x1 = X(pipes[k - 1].vertex[0]), x2 = X(pipes[k].vertex[0]);
-        o.push('<text x="' + ((x1 + x2) / 2).toFixed(1) + '" y="' + (dimY + LABEL_DROP) +
-          '" text-anchor="middle">' + fmt(stagger) + '</text>');
-      }
-    } else {
-      // 1つずつ書くと重なるので、まとめて「ずらし量 × 箇所数」で出す
-      o.push('<text x="' +
-        ((X(pipes[0].vertex[0]) + X(pipes[count - 1].vertex[0])) / 2).toFixed(1) +
-        '" y="' + (dimY + LABEL_DROP) + '" text-anchor="middle">' +
-        esc(fmt(stagger) + ' × ' + (count - 1)) + '</text>');
-    }
-
-    o.push('</svg>');
-    return o.join('');
-  }
 
   /* ------------------------------------------------- モード1：2本の芯々 */
 
@@ -381,7 +133,7 @@
     var c1 = a.od / 2;
     var c2 = c1 + pitch;
     var total = c2 + b.od / 2;
-    two.figure.innerHTML = layoutSVG(
+    two.figure.innerHTML = F.layoutSVG(
       [{ center: c1, od: a.od, label: a.label }, { center: c2, od: b.od, label: b.label }],
       total,
       [{ from: c1, to: c2, label: fmt(pitch) }]
@@ -497,7 +249,7 @@
         label: fmt(total - items[items.length - 1].center)
       });
     }
-    even.figure.innerHTML = layoutSVG(items, total, dims);
+    even.figure.innerHTML = F.layoutSVG(items, total, dims);
 
     // 墨出し表：左端からの累計と、直前の管からのピッチ
     var rows = items.map(function (it, i) {
@@ -693,7 +445,7 @@
         label: fmt(items[i].center - items[i - 1].center)
       });
     }
-    mixed.figure.innerHTML = layoutSVG(items, out.totalWidth, dims);
+    mixed.figure.innerHTML = F.layoutSVG(items, out.totalWidth, dims);
 
     var body = out.items.map(function (it, i) {
       var g = i === 0 ? null : gaps[i - 1];
@@ -762,7 +514,7 @@
     }
     stag.result.innerHTML = html;
 
-    stag.figure.innerHTML = staggerSVG(count, pitch, angle, r.stagger, r.pitchAfter);
+    stag.figure.innerHTML = F.staggerSVG(count, pitch, angle, r.stagger, r.pitchAfter);
 
     var rows = '';
     for (var i = 0; i < count; i++) {
@@ -771,6 +523,222 @@
     stag.marks.innerHTML =
       '<table><thead><tr><th>本</th><th>1本目からのずらし（mm）</th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table>';
+  }
+
+  /* ------------------------------------------- モード5：サドル・支持点 */
+
+  var sup = {
+    pipe: $('#sup-pipe'), pipeOd: $('#sup-pipe-od'),
+    length: $('#sup-length'), span: $('#sup-span'), margin: $('#sup-margin'),
+    result: $('#sup-result'), figure: $('#sup-figure'), marks: $('#sup-marks')
+  };
+  // 管を選び直したときだけ上限間隔を入れ替える（手で直した値を毎回上書きしないため）
+  var supLastSeries = null;
+
+  function renderSupport() {
+    var p = readPipe(sup.pipe, sup.pipeOd);
+    var series = p && p.size ? D.findSeries(p.size.series) : null;
+
+    if (series && series.id !== supLastSeries) {
+      sup.span.value = series.maxSupportSpan;
+      supLastSeries = series.id;
+    } else if (!series) {
+      supLastSeries = null;
+    }
+
+    var length = parseFloat(sup.length.value);
+    var maxSpan = parseFloat(sup.span.value);
+    var margin = parseFloat(sup.margin.value);
+    var r;
+    try {
+      r = C.supportLayout(length, maxSpan, margin);
+    } catch (e) {
+      sup.result.innerHTML = msg(e.message, 'warn');
+      sup.figure.innerHTML = ''; sup.marks.innerHTML = '';
+      return;
+    }
+
+    var html = big('サドルの数', String(r.count), '個');
+    html += kv([
+      ['支持点の間隔', fmt(r.span) + ' mm'],
+      ['間隔の上限', fmt(maxSpan) + ' mm'],
+      ['端からの距離', fmt(margin) + ' mm'],
+      ['配管の全長', fmt(length) + ' mm']
+    ]);
+
+    if (!r.ok) {
+      html += msg('この条件では上限間隔に収まりません。端からの距離を見直してください。', 'bad');
+    }
+    if (series) {
+      html += msg(series.short + 'は' + series.material + '製なので、支持点間隔の目安は ' +
+        fmt(series.maxSupportSpan) + 'mm 以下です。' +
+        '（金属管2m以下・合成樹脂管1.5m以下、ボックスや管端からは0.3m以内。' +
+        '現場の基準があればそちらを優先してください）', '');
+    }
+    sup.result.innerHTML = html;
+
+    sup.figure.innerHTML = F.supportSVG(length, r.positions, margin);
+
+    var rows = r.positions.map(function (x, i) {
+      return '<tr><td>' + (i + 1) + '</td><td>' + fmt(x) + '</td><td>' +
+        (i === 0 ? '—' : fmt(x - r.positions[i - 1])) + '</td></tr>';
+    }).join('');
+    sup.marks.innerHTML =
+      '<table><thead><tr><th>番</th><th>端からの位置（mm）</th>' +
+      '<th>前から（mm）</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  /* ------------------------------------------ 曲げ1：オフセット（振り） */
+
+  var off = {
+    rise: $('#off-rise'), angle: $('#off-angle'),
+    result: $('#off-result'), figure: $('#off-figure')
+  };
+
+  function renderOffset() {
+    var r;
+    try {
+      r = C.offset(parseFloat(off.rise.value), parseFloat(off.angle.value));
+    } catch (e) {
+      off.result.innerHTML = msg(e.message, 'warn');
+      off.figure.innerHTML = '';
+      return;
+    }
+
+    var html = big('曲げと曲げの間隔', fmt(r.travel), 'mm');
+    html += kv([
+      ['段差', fmt(r.rise) + ' mm'],
+      ['曲げ角度', fmt(r.angle) + ' °'],
+      ['倍率（1 ÷ sin角度）', '×' + fmt(r.multiplier)],
+      ['縮み代', fmt(r.shrink) + ' mm'],
+      ['走り方向に進む距離', fmt(r.run) + ' mm']
+    ]);
+    html += msg('1つ目の墨から ' + fmt(r.travel) + 'mm 先が2つ目の墨です。' +
+      'この振りで走りは ' + fmt(r.shrink) + 'mm 縮むので、その分を見込んで拾ってください。', '');
+    html += msg('曲げ半径のない折れ線として計算しています。実際のベンダーでは半径のぶん差が出るので、' +
+      '1本目は現物合わせで確かめてください。', '');
+    off.result.innerHTML = html;
+
+    off.figure.innerHTML = F.offsetSVG(r);
+  }
+
+  /* --------------------------------------------- 曲げ2：曲げの取り代 */
+
+  var tk = {
+    pipe: $('#tk-pipe'), pipeOd: $('#tk-pipe-od'),
+    a: $('#tk-a'), b: $('#tk-b'), radius: $('#tk-radius'), angle: $('#tk-angle'),
+    result: $('#tk-result'), figure: $('#tk-figure')
+  };
+
+  function renderTakeup() {
+    var p = readPipe(tk.pipe, tk.pipeOd);
+    var r;
+    try {
+      r = C.bendMarks(parseFloat(tk.a.value), parseFloat(tk.b.value),
+        parseFloat(tk.radius.value), parseFloat(tk.angle.value));
+    } catch (e) {
+      tk.result.innerHTML = msg(e.message, 'warn');
+      tk.figure.innerHTML = '';
+      return;
+    }
+
+    var html = big('切断長', fmt(r.developed), 'mm');
+    html += kv([
+      ['取り代', fmt(r.takeup) + ' mm'],
+      ['曲げ始めの墨（管端Aから）', fmt(r.markStart) + ' mm'],
+      ['曲げ終わりの墨', fmt(r.markEnd) + ' mm'],
+      ['交点から曲げ始めまで', fmt(r.tangent) + ' mm'],
+      ['曲げている部分の長さ', fmt(r.arc) + ' mm']
+    ]);
+
+    if (!r.fits) {
+      html += msg('外寸が曲げ半径に対して短すぎます。この半径では曲げきれません。', 'bad');
+    }
+
+    // 選んだ管があれば、内線規程の最小曲げ半径と突き合わせる
+    if (p && p.size) {
+      var mb = C.minBendRadius(p.size.id, p.size.od);
+      html += kv([
+        [p.label + ' の最小曲げ半径（内側）', fmt(mb.inner) + ' mm'],
+        ['同じく管の芯で', fmt(mb.center) + ' mm']
+      ]);
+      if (r.radius < mb.center) {
+        html += msg('曲げ半径が内線規程の下限を下回っています。' +
+          '内側の半径は管内径（' + fmt(p.size.id) + 'mm）の6倍以上、' +
+          '管の芯で ' + fmt(mb.center) + 'mm 以上にしてください。', 'bad');
+      } else {
+        html += msg('内線規程の「内側の半径は管内径の6倍以上」を満たしています。', 'ok');
+      }
+    }
+    tk.result.innerHTML = html;
+
+    tk.figure.innerHTML = F.takeupSVG(r);
+  }
+
+  /* ----------------------------------------------- 曲げ3：障害物よけ */
+
+  var sd = {
+    kind: $('#sd-kind'), height: $('#sd-height'), angle: $('#sd-angle'),
+    width: $('#sd-width'), clear: $('#sd-clear'), widthRow: $('#sd-width-row'),
+    result: $('#sd-result'), figure: $('#sd-figure'), marks: $('#sd-marks')
+  };
+
+  function renderSaddle() {
+    var four = sd.kind.value === '4';
+    sd.widthRow.hidden = !four;
+
+    var h = parseFloat(sd.height.value);
+    var angle = parseFloat(sd.angle.value);
+    var r;
+    try {
+      r = four
+        ? C.saddle4(h, parseFloat(sd.width.value), angle, parseFloat(sd.clear.value))
+        : C.saddle3(h, angle);
+    } catch (e) {
+      sd.result.innerHTML = msg(e.message, 'warn');
+      sd.figure.innerHTML = ''; sd.marks.innerHTML = '';
+      return;
+    }
+
+    var html, rows;
+    if (four) {
+      html = big('墨と墨の合計', fmt(r.total), 'mm');
+      html += kv([
+        ['1→2（立ち上がり）', fmt(r.spans[0]) + ' mm'],
+        ['2→3（上を通る）', fmt(r.spans[1]) + ' mm'],
+        ['3→4（立ち下がり）', fmt(r.spans[2]) + ' mm'],
+        ['側面の曲げ角度', fmt(angle) + ' °'],
+        ['縮み代', fmt(r.shrink) + ' mm']
+      ]);
+      rows = r.marks.map(function (m, i) {
+        return '<tr><td>' + (i + 1) + '</td><td>' + fmt(m) + '</td><td>' +
+          (i === 0 ? '—' : fmt(r.spans[i - 1])) + '</td></tr>';
+      }).join('');
+    } else {
+      html = big('中央から両側の墨まで', fmt(r.markSpacing), 'mm');
+      html += kv([
+        ['中央の曲げ角度', fmt(r.centerAngle) + ' °'],
+        ['側面の曲げ角度', fmt(r.sideAngle) + ' °'],
+        ['障害物の高さ', fmt(r.height) + ' mm'],
+        ['縮み代', fmt(r.shrink) + ' mm']
+      ]);
+      html += msg('障害物の真上に中央の墨を付け、そこから前後に ' + fmt(r.markSpacing) +
+        'mm ずつが両側の墨です。', '');
+      rows = [0, 1, 2].map(function (i) {
+        return '<tr><td>' + (i + 1) + '</td><td>' + fmt(i * r.markSpacing) +
+          '</td><td>' + (i === 0 ? '—' : fmt(r.markSpacing)) + '</td></tr>';
+      }).join('');
+    }
+
+    html += msg('曲げ半径のない折れ線として計算しています。実際のベンダーでは半径のぶん差が出るので、' +
+      '1本目は現物合わせで確かめてください。', '');
+    sd.result.innerHTML = html;
+
+    sd.figure.innerHTML = F.saddleSVG(r, four ? 4 : 3, parseFloat(sd.width.value));
+
+    sd.marks.innerHTML =
+      '<table><thead><tr><th>墨</th><th>1つ目からの累計（mm）</th>' +
+      '<th>前から（mm）</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   /* ------------------------------------------------------------ 寸法表 */
@@ -861,6 +829,10 @@
     renderEven();
     renderMixed();
     renderStagger();
+    renderSupport();
+    renderOffset();
+    renderTakeup();
+    renderSaddle();
     renderTable();
   }
 
@@ -868,6 +840,8 @@
     fillPipeSelect(two.p1, 'E25');
     fillPipeSelect(two.p2, 'E25');
     fillPipeSelect(even.pipe, 'E25');
+    fillPipeSelect(sup.pipe, 'E25');
+    fillPipeSelect(tk.pipe, 'E25');
 
     D.PIPE_SERIES.forEach(function (s) {
       var o = document.createElement('option');
@@ -881,6 +855,10 @@
       even.gap, even.count, even.pitch], renderEven);
     bind([mixed.mode, mixed.gap, mixed.width, mixed.margin], renderMixed);
     bind([stag.pitch, stag.pitch2, stag.angle, stag.count], renderStagger);
+    bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin], renderSupport);
+    bind([off.rise, off.angle], renderOffset);
+    bind([tk.pipe, tk.pipeOd, tk.a, tk.b, tk.radius, tk.angle], renderTakeup);
+    bind([sd.kind, sd.height, sd.angle, sd.width, sd.clear], renderSaddle);
     bind([tbl.series, tbl.search], renderTable);
 
     // 混在モードは行が動的なので、リスト全体で拾う
@@ -892,10 +870,14 @@
       renderMixed();
     });
 
-    $$('.chip', stag.quick).forEach(function (c) {
-      c.addEventListener('click', function () {
-        stag.angle.value = c.dataset.angle;
-        renderStagger();
+    // 角度のクイック選択。どのモードでも data-target の欄に値を入れて描き直す
+    $$('.quick[data-target]').forEach(function (q) {
+      var target = $('#' + q.dataset.target);
+      $$('.chip', q).forEach(function (c) {
+        c.addEventListener('click', function () {
+          target.value = c.dataset.angle;
+          renderAll();
+        });
       });
     });
 
