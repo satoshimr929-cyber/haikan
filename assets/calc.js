@@ -497,6 +497,16 @@
     return null;
   }
 
+  /** 位置 x にいちばん近い接続点と、そこまでの距離 */
+  function nearestJoint(x, joints) {
+    if (!joints.length) return { joint: null, distance: null };
+    var best = joints[0];
+    for (var i = 1; i < joints.length; i++) {
+      if (Math.abs(x - joints[i]) < Math.abs(x - best)) best = joints[i];
+    }
+    return { joint: best, distance: Math.abs(x - best) };
+  }
+
   /**
    * 接続点を踏まえた支持点の割り付け。
    * @param {object} o
@@ -543,6 +553,28 @@
       spans.push(positions[i].x - positions[i - 1].x);
     }
 
+    // 各支持点から、いちばん近い接続点までの距離
+    positions.forEach(function (p) {
+      var n = nearestJoint(p.x, joints);
+      p.nearest = n.joint;
+      p.distance = n.distance;
+    });
+
+    // 各接続点から、いちばん近い支持点まで（図の寸法と、詰まり具合の把握に使う）
+    var jointChecks = joints.map(function (j) {
+      var bi = 0;
+      positions.forEach(function (p, i) {
+        if (Math.abs(p.x - j) < Math.abs(positions[bi].x - j)) bi = i;
+      });
+      return {
+        joint: j,
+        index: bi,
+        support: positions[bi].x,
+        distance: Math.abs(positions[bi].x - j),
+        clash: Math.abs(positions[bi].x - j) < clear - 1e-9
+      };
+    });
+
     var clashes = positions.map(function (p, idx) {
       return p.clash === null ? null : { index: idx, joint: p.clash, suggest: p.suggest };
     }).filter(Boolean);
@@ -554,6 +586,10 @@
       clear: clear,
       jointOffset: offset,
       joints: joints,
+      jointChecks: jointChecks,
+      minJointDistance: jointChecks.length
+        ? Math.min.apply(null, jointChecks.map(function (c) { return c.distance; }))
+        : null,
       clashes: clashes,
       supportAtJoints: !!(o.supportAtJoints && joints.length),
       ok: spans.every(function (v) { return v <= maxSpan + 1e-9; }) && !clashes.length
