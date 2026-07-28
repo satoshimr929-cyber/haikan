@@ -86,6 +86,60 @@ eq('同径を並べれば centerPitch と同じ',
   C.centerPitch(25.4, 25.4, 20).pitch);
 throws('空リストは例外', function () { C.layoutMixed([], 20, 30); });
 
+console.log('\nparallelStaggerList（ピッチが管ごとに違う並び）');
+// サイズ混在の並びをそのまま渡せる
+var mixPitches = [48.6, 61.3];
+var sl = C.parallelStaggerList(mixPitches, 45);
+eq('ペアの数はピッチの数と同じ', sl.pairs.length, 2);
+eq('1本目のずれは0', sl.offsets[0], 0);
+eq('offsets はペアごとの累計', sl.offsets[2], sl.pairs[0].stagger + sl.pairs[1].stagger, 1e-9);
+eq('合計は最後の offset', sl.total, sl.offsets[2], 1e-9);
+mixPitches.forEach(function (p, i) {
+  eq('ペア' + (i + 1) + 'は単体の parallelStagger と一致',
+    sl.pairs[i].stagger, C.parallelStagger(p, 45).stagger, 1e-9);
+});
+check('ピッチが違えばずらし量も違う',
+  Math.abs(sl.pairs[0].stagger - sl.pairs[1].stagger) > 1e-6);
+
+// 一定ピッチなら、従来の単体計算をそのまま並べたのと同じ
+var flat = C.parallelStaggerList([75, 75, 75], 90);
+check('一定ピッチならずらし量は全ペア同じ',
+  flat.pairs.every(function (p) { return near(p.stagger, 75, 1e-9); }));
+eq('4本ぶんの合計は3ピッチぶん', flat.total, 225, 1e-9);
+eq('offsets は等間隔', flat.offsets[2], 150, 1e-9);
+
+// 曲げた先のピッチを1つの値で揃える（ばらばらの並びを盤で揃えるとき）
+var toEven = C.parallelStaggerList(mixPitches, 45, 50);
+check('全ペアの曲げた先が指定値になる',
+  toEven.pairs.every(function (p) { return near(p.pitchAfter, 50, 1e-9); }));
+check('曲げた先を揃えると、ずらし量はペアごとに変わる',
+  Math.abs(toEven.pairs[0].stagger - toEven.pairs[1].stagger) > 1e-6);
+// 曲げたあとのピッチが本当に50になるか、法線へ射影して確かめる
+mixPitches.forEach(function (p, i) {
+  var t = 45 * Math.PI / 180;
+  eq('ペア' + (i + 1) + '：曲げた先は50mm',
+    Math.abs(toEven.pairs[i].stagger * Math.sin(t) + p * Math.cos(t)), 50, 1e-9);
+});
+
+// 配列で個別に指定もできる
+var perPair = C.parallelStaggerList(mixPitches, 45, [50, 80]);
+eq('1ペア目の曲げた先', perPair.pairs[0].pitchAfter, 50);
+eq('2ペア目の曲げた先', perPair.pairs[1].pitchAfter, 80);
+
+throws('空の配列は例外', function () { C.parallelStaggerList([], 45); });
+throws('配列でなければ例外', function () { C.parallelStaggerList(75, 45); });
+throws('曲げた先の数が合わなければ例外',
+  function () { C.parallelStaggerList(mixPitches, 45, [50]); });
+throws('角度が範囲外なら例外', function () { C.parallelStaggerList(mixPitches, 0); });
+
+// layoutMixed の出力をそのまま渡せることを確かめる
+var lmForBend = C.layoutMixed([{ od: 25.4 }, { od: 31.8 }, { od: 50.8 }], 20, 30);
+var handoff = C.parallelStaggerList(lmForBend.pitches, 45);
+eq('サイズ混在のピッチをそのまま渡せる', handoff.pairs.length, lmForBend.pitches.length);
+check('渡したピッチが各ペアに入る', handoff.pairs.every(function (p, i) {
+  return near(p.pitch, lmForBend.pitches[i], 1e-9);
+}));
+
 console.log('\nlayoutMixedPitches（ピッチを1本ずつ指定）');
 var lp = C.layoutMixedPitches(
   [{ od: 25.4, label: 'E25' }, { od: 31.8, label: 'E31' }, { od: 50.8, label: 'E51' }],
