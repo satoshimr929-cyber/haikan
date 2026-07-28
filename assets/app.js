@@ -595,6 +595,9 @@
       ['いちばん広い間隔', fmt(maxUsed) + ' mm'],
       ['間隔の上限', fmt(maxSpan) + ' mm'],
       ['接続点', joints.length ? joints.length + ' 箇所' : 'なし'],
+      ['接続点までの最短', r.minJointDistance === null ? '—'
+        : fmt(r.minJointDistance) + ' mm'],
+      ['当たる距離', joints.length ? fmt(r.clear) + ' mm 未満' : '—'],
       ['端からの距離', fmt(margin) + ' mm'],
       ['配管の全長', fmt(length) + ' mm']
     ]);
@@ -645,22 +648,32 @@
 
     sup.figure.innerHTML = F.supportSVG({
       length: length, margin: margin, positions: r.positions,
-      joints: joints, couplingLength: parseFloat(sup.coupling.value)
+      joints: joints, couplingLength: parseFloat(sup.coupling.value),
+      jointChecks: r.jointChecks
     });
 
     var rows = r.positions.map(function (pos, i) {
+      // 接続点までの距離。当たっていれば逃がし先も添える
+      var near = '—';
+      if (pos.distance !== null) {
+        near = fmt(pos.distance);
+        if (pos.clash !== null) {
+          near = '<span class="bad-text">' + near + '</span>' +
+            '<span class="code">' +
+            (pos.suggest === null ? '当たり' : '→' + fmt(pos.suggest)) + '</span>';
+        }
+      }
       return '<tr' + (pos.clash === null ? '' : ' class="row-bad"') + '>' +
         '<td>' + (i + 1) + '</td>' +
         '<td>' + fmt(pos.x) + '</td>' +
         '<td>' + (i === 0 ? '—' : fmt(pos.x - r.positions[i - 1].x)) + '</td>' +
         '<td>' + esc(SUP_KIND[pos.kind] || pos.kind) + '</td>' +
-        '<td>' + (pos.clash === null ? '—'
-          : (pos.suggest === null ? '当たり' : '当たり→' + fmt(pos.suggest))) + '</td>' +
+        '<td>' + near + '</td>' +
         '</tr>';
     }).join('');
     sup.marks.innerHTML =
       '<table><thead><tr><th>番</th><th>端から</th><th>前から</th>' +
-      '<th>種別</th><th>接続点</th></tr></thead><tbody>' + rows + '</tbody></table>';
+      '<th>種別</th><th>接続点<br>まで</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   /* ------------------------------------------ 曲げ1：オフセット（振り） */

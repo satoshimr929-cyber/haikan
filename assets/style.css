@@ -349,6 +349,7 @@ td { font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: var(--accent-soft); }
 td.bad-cell { color: var(--bad); font-weight: 700; }
 tr.row-bad td { color: var(--bad); }
+td .bad-text { color: var(--bad); font-weight: 700; }
 .series-head td {
   background: var(--bg-input);
   color: var(--fg-dim);

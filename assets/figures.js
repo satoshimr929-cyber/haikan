@@ -536,6 +536,7 @@
    * @param {Array} p.positions supportPlan の positions（{x, kind, clash, suggest}）
    * @param {number[]} [p.joints] 管の接続点
    * @param {number} [p.couplingLength] カップリングの長さ（接続点の描画に使う）
+   * @param {Array} [p.jointChecks] 接続点ごとの最寄りの支持点（{joint, support, distance, clash}）
    */
   function supportSVG(p) {
     if (!p || !(p.length > 0) || !p.positions || p.positions.length < 2) return '';
@@ -583,6 +584,21 @@
       if (i === 0 || i === positions.length - 1 || seg >= 24) {
         o.push(tryLabel(px, py - 12, String(i + 1), 'middle', 'strong'));
       }
+    });
+
+    // 接続点から最寄りの支持点までの距離。管と下の寸法線のあいだに引く
+    var midY = (py + c.dimY) / 2;
+    (p.jointChecks || []).forEach(function (jc) {
+      var x1 = c.X(jc.joint), x2 = c.X(jc.support);
+      if (Math.abs(x2 - x1) < 3) return; // ほぼ重なっていれば線にならない
+      o.push('<line class="' + (jc.clash ? 'saddle-bad' : 'dim') + '" x1="' + x1.toFixed(1) +
+        '" y1="' + midY.toFixed(1) + '" x2="' + x2.toFixed(1) +
+        '" y2="' + midY.toFixed(1) + '"/>');
+      [x1, x2].forEach(function (x) {
+        o.push('<line class="dim" x1="' + x.toFixed(1) + '" y1="' + (midY - 4).toFixed(1) +
+          '" x2="' + x.toFixed(1) + '" y2="' + (midY + 4).toFixed(1) + '"/>');
+      });
+      o.push(tryLabel((x1 + x2) / 2, midY - 7, fmt(jc.distance)));
     });
 
     // 端あきと支持点の間隔

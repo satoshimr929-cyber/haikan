@@ -388,6 +388,31 @@ var steel = C.supportPlan({
   couplingLength: 60, saddleWidth: 25
 });
 eq('必要なあき = (60 + 25) ÷ 2', steel.clear, 42.5);
+// 各支持点から最寄りの接続点までの距離
+check('どの支持点にも最寄りの接続点までの距離が付く', steel.positions.every(function (p) {
+  return p.distance !== null && p.nearest !== null;
+}));
+check('距離は最寄りの接続点との差', steel.positions.every(function (p) {
+  var d = steel.joints.map(function (j) { return Math.abs(p.x - j); });
+  return near(p.distance, Math.min.apply(null, d), 1e-9);
+}));
+eq('接続点ごとの確認は接続点の数だけある', steel.jointChecks.length, steel.joints.length);
+check('接続点ごとに最寄りの支持点が入る', steel.jointChecks.every(function (jc) {
+  var d = steel.positions.map(function (p) { return Math.abs(p.x - jc.joint); });
+  return near(jc.distance, Math.min.apply(null, d), 1e-9) &&
+    near(jc.support, steel.positions[jc.index].x, 1e-9);
+}));
+eq('最短距離は接続点ごとの最小', steel.minJointDistance,
+  Math.min.apply(null, steel.jointChecks.map(function (jc) { return jc.distance; })), 1e-9);
+eq('E25・10m の最短は 3番と3660 の 400mm', steel.minJointDistance, 400, 1e-9);
+check('最短が必要なあき以上なら当たらない',
+  steel.minJointDistance >= steel.clear && steel.clashes.length === 0);
+check('接続点がなければ距離は null', C.supportPlan({
+  length: 5000, maxSpan: 2000, endMargin: 300
+}).minJointDistance === null);
+check('接続点がなければ各支持点の距離も null',
+  C.supportPlan({ length: 5000, maxSpan: 2000, endMargin: 300 })
+    .positions.every(function (p) { return p.distance === null; }));
 check('支持点はすべて上限間隔以内', steel.spans.every(function (v) { return v <= 2000 + 1e-9; }));
 check('両側支持は使っていない', steel.supportAtJoints === false);
 check('すべて等間隔由来', steel.positions.every(function (p) { return p.kind === 'even'; }));
