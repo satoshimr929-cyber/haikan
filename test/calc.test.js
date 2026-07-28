@@ -371,6 +371,74 @@ eq('範囲外の個別指定は落ちる',
   C.jointPositions(6000, null, null, [-100, 0, 6000, 8000]).length, 0);
 throws('全長が数値でなければ例外', function () { C.jointPositions(NaN, 3660); });
 
+console.log('\njointPositions（センター継ぎ）');
+// 6m を 3.66m の定尺で継ぐ。定尺優先なら 3660+2340、均等なら 3000+3000
+eq('6m・定尺優先の継ぎは1箇所', C.jointPositions(6000, 3660).length, 1);
+eq('6m・定尺優先の継ぎは3660', C.jointPositions(6000, 3660)[0], 3660);
+eq('6m・均等の継ぎも1箇所', C.jointPositions(6000, 3660, null, null, 'even').length, 1);
+eq('6m・均等の継ぎは真ん中', C.jointPositions(6000, 3660, null, null, 'even')[0], 3000);
+// 3本必要な長さでは等分になる
+eq('10m・均等は2箇所', C.jointPositions(10000, 3660, null, null, 'even').length, 2);
+eq('10m・均等の1つ目', C.jointPositions(10000, 3660, null, null, 'even')[0], 10000 / 3, 1e-9);
+eq('10m・均等の2つ目', C.jointPositions(10000, 3660, null, null, 'even')[1], 20000 / 3, 1e-9);
+check('均等はどのピースも定尺以内',
+  C.pieceLengths(10000, C.jointPositions(10000, 3660, null, null, 'even'))
+    .every(function (v) { return v <= 3660 + 1e-9; }));
+eq('定尺ちょうど2本ぶんなら、どちらのやり方も同じ',
+  C.jointPositions(7320, 3660, null, null, 'even')[0],
+  C.jointPositions(7320, 3660)[0], 1e-9);
+eq('定尺より短ければ継ぎなし', C.jointPositions(3000, 3660, null, null, 'even').length, 0);
+check('均等でも個別追加は効く',
+  C.jointPositions(6000, 3660, null, [1000], 'even').length === 2);
+
+console.log('\npieceLengths / cutList（材料の拾い）');
+eq('接続点がなければ1本', C.pieceLengths(6000, []).length, 1);
+eq('その1本は全長そのもの', C.pieceLengths(6000, [])[0], 6000);
+var pl6 = C.pieceLengths(6000, C.jointPositions(6000, 3660));
+check('6m・定尺優先は 3660 + 2340', pl6.length === 2 && near(pl6[0], 3660) && near(pl6[1], 2340));
+var pl6e = C.pieceLengths(6000, C.jointPositions(6000, 3660, null, null, 'even'));
+check('6m・均等は 3000 + 3000', pl6e.length === 2 && near(pl6e[0], 3000) && near(pl6e[1], 3000));
+check('ピースの合計は全長', [pl6, pl6e].every(function (arr) {
+  return near(arr.reduce(function (a, b) { return a + b; }, 0), 6000, 1e-9);
+}));
+
+var cl6 = C.cutList(pl6, 3660);
+eq('6m・定尺優先で必要な定尺は2本', cl6.stockCount, 2);
+eq('端材の合計 = 定尺2本 − 6000', cl6.totalWaste, 3660 * 2 - 6000, 1e-9);
+eq('いちばん長い端材は1320', cl6.longestOffcut, 1320, 1e-9);
+check('1本目は定尺をそのまま使う', near(cl6.bins[0].cuts[0], 3660) && near(cl6.bins[0].waste, 0));
+
+var cl6e = C.cutList(pl6e, 3660);
+eq('6m・均等でも必要な定尺は2本', cl6e.stockCount, 2);
+eq('端材の合計は定尺優先と同じ', cl6e.totalWaste, cl6.totalWaste, 1e-9);
+eq('ただし端材は660ずつに割れる', cl6e.longestOffcut, 660, 1e-9);
+check('定尺優先のほうが長い端材が残る', cl6.longestOffcut > cl6e.longestOffcut);
+
+// 短いピースは1本の定尺にまとめて取れる
+var many = C.cutList([1500, 1500, 600], 3660);
+eq('1500+1500+600 は定尺1本に収まる', many.stockCount, 1);
+eq('そのときの端材は60', many.bins[0].waste, 60, 1e-9);
+check('切り出しの合計は元のピースの合計', (function () {
+  var all = [];
+  many.bins.forEach(function (b) { all = all.concat(b.cuts); });
+  return near(all.reduce(function (a, b) { return a + b; }, 0), 3600, 1e-9);
+})());
+eq('どの定尺も使い切りを超えない', many.bins.filter(function (b) {
+  return b.used > 3660 + 1e-9;
+}).length, 0);
+
+// 10m・定尺優先 → 3660 + 3660 + 2680
+var pl10 = C.pieceLengths(10000, C.jointPositions(10000, 3660));
+check('10m・定尺優先は 3660 が2本と 2680',
+  pl10.length === 3 && near(pl10[0], 3660) && near(pl10[1], 3660) && near(pl10[2], 2680));
+eq('10m に必要な定尺は3本', C.cutList(pl10, 3660).stockCount, 3);
+eq('10m の端材合計', C.cutList(pl10, 3660).totalWaste, 3660 * 3 - 10000, 1e-9);
+
+eq('長さ0のピースは無視される', C.cutList([3000, 0], 3660).stockCount, 1);
+throws('定尺より長いピースは例外', function () { C.cutList([4000], 3660); });
+throws('定尺0は例外', function () { C.cutList([1000], 0); });
+throws('長さが数値でなければ例外', function () { C.cutList([1000, NaN], 3660); });
+
 console.log('\nsupportPlan（金属管：接続点を避ける）');
 // 接続点も両側支持もなければ、従来の supportLayout と同じ
 var plain = C.supportPlan({ length: 5000, maxSpan: 2000, endMargin: 300 });

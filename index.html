@@ -274,10 +274,18 @@
           </div>
         </div>
         <div class="field">
-          <label for="sup-first">最初の継ぎまで</label>
-          <div class="unit">
-            <input type="number" id="sup-first" step="10" placeholder="定尺と同じ"><span>mm</span>
-          </div>
+          <label for="sup-joint-mode">継ぎ方</label>
+          <select id="sup-joint-mode">
+            <option value="stock">定尺＋半端（端から）</option>
+            <option value="even">均等（センターで継ぐ）</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field" id="sup-first-field">
+        <label for="sup-first">最初の継ぎまで</label>
+        <div class="unit">
+          <input type="number" id="sup-first" step="10" placeholder="定尺と同じ"><span>mm</span>
         </div>
       </div>
 
@@ -315,6 +323,7 @@
       <div class="result" id="sup-result"></div>
       <div class="figure" id="sup-figure"></div>
       <div class="table-wrap" id="sup-marks"></div>
+      <div id="sup-cuts"></div>
     </div>
   </div>
 

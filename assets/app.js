@@ -531,6 +531,7 @@
     pipe: $('#sup-pipe'), pipeOd: $('#sup-pipe-od'),
     length: $('#sup-length'), span: $('#sup-span'), margin: $('#sup-margin'),
     stock: $('#sup-stock'), first: $('#sup-first'), extra: $('#sup-extra'),
+    jointMode: $('#sup-joint-mode'), firstField: $('#sup-first-field'), cuts: $('#sup-cuts'),
     coupling: $('#sup-coupling'), saddle: $('#sup-saddle'),
     atJoint: $('#sup-atjoint'), jointOffset: $('#sup-joint-offset'),
     result: $('#sup-result'), figure: $('#sup-figure'), marks: $('#sup-marks')
@@ -565,6 +566,9 @@
     var margin = parseFloat(sup.margin.value);
     var stock = sup.stock.value === '' ? null : parseFloat(sup.stock.value);
     var first = sup.first.value === '' ? null : parseFloat(sup.first.value);
+    var jointMode = sup.jointMode.value;
+    // 均等に割るときは、最初の継ぎまでの距離を指定する余地がない
+    sup.firstField.hidden = jointMode === 'even';
     sup.first.placeholder = stock ? '定尺と同じ（' + fmt(stock) + '）' : '定尺と同じ';
 
     // 接続点の両側に支持を置くか。既定は材質にしたがう
@@ -573,7 +577,7 @@
 
     var joints, r;
     try {
-      joints = C.jointPositions(length, stock, first, parseList(sup.extra.value));
+      joints = C.jointPositions(length, stock, first, parseList(sup.extra.value), jointMode);
       r = C.supportPlan({
         length: length, maxSpan: maxSpan, endMargin: margin,
         joints: joints,
@@ -674,6 +678,55 @@
     sup.marks.innerHTML =
       '<table><thead><tr><th>番</th><th>端から</th><th>前から</th>' +
       '<th>種別</th><th>接続点<br>まで</th></tr></thead><tbody>' + rows + '</tbody></table>';
+
+    renderCuts(length, joints, stock);
+  }
+
+  /** 管を何本使って、どこで切って、端材がどれだけ出るか */
+  function renderCuts(length, joints, stock) {
+    var pieces = C.pieceLengths(length, joints);
+
+    if (!stock) {
+      // 定尺が分からなければ、切り出す長さだけ出す
+      sup.cuts.innerHTML = '<h3 class="sub-head">管の拾い</h3>' +
+        msg('定尺を入れると、必要な本数と端材まで出します。', '') +
+        '<div class="table-wrap"><table><thead><tr><th>本</th><th>切る長さ（mm）</th>' +
+        '</tr></thead><tbody>' + pieces.map(function (v, i) {
+          return '<tr><td>' + (i + 1) + '</td><td>' + fmt(v) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+      return;
+    }
+
+    var cl;
+    try {
+      cl = C.cutList(pieces, stock);
+    } catch (e) {
+      sup.cuts.innerHTML = '<h3 class="sub-head">管の拾い</h3>' + msg(e.message, 'warn');
+      return;
+    }
+
+    var html = '<h3 class="sub-head">管の拾い</h3>';
+    html += big('必要な定尺', String(cl.stockCount), '本');
+    html += kv([
+      ['定尺の長さ', fmt(stock) + ' mm'],
+      ['切る本数', pieces.length + ' 本'],
+      ['端材の合計', fmt(cl.totalWaste) + ' mm'],
+      ['いちばん長い端材', fmt(cl.longestOffcut) + ' mm']
+    ]);
+
+    // 切る長さの並び（端から順）。ひと目で拾えるように文章でも出す
+    html += msg('端から ' + pieces.map(fmt).join(' + ') + ' mm に切ります。', '');
+
+    var rows = cl.bins.map(function (b, i) {
+      return '<tr><td>' + (i + 1) + '本目</td>' +
+        '<td>' + b.cuts.map(fmt).join(' + ') + '</td>' +
+        '<td>' + fmt(b.waste) + '</td></tr>';
+    }).join('');
+    html += '<div class="table-wrap"><table><thead><tr><th>定尺</th>' +
+      '<th>切り出し（mm）</th><th>端材（mm）</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div>';
+
+    sup.cuts.innerHTML = html;
   }
 
   /* ------------------------------------------ 曲げ1：オフセット（振り） */
@@ -945,7 +998,7 @@
     bind([stag.pitch, stag.pitch2, stag.angle, stag.count], renderStagger);
     bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin,
       sup.stock, sup.first, sup.extra, sup.coupling, sup.saddle,
-      sup.atJoint, sup.jointOffset], renderSupport);
+      sup.atJoint, sup.jointOffset, sup.jointMode], renderSupport);
     bind([off.rise, off.angle], renderOffset);
     bind([tk.pipe, tk.pipeOd, tk.a, tk.b, tk.radius, tk.angle], renderTakeup);
     bind([sd.kind, sd.height, sd.angle, sd.width, sd.clear], renderSaddle);
