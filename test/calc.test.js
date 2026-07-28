@@ -228,6 +228,134 @@ eq('曲げた先が 手前×cos角度 ならずらし量は0',
 throws('曲げた先のピッチが数値でなければ例外',
   function () { C.parallelStagger(75, 45, NaN); });
 
+console.log('\noffset（オフセット・振り）');
+var of45 = C.offset(100, 45);
+eq('45°の斜辺 = 段差 ÷ sin45', of45.travel, 100 / Math.SQRT1_2 / 2 * 2, 1e-9);
+eq('45°の斜辺は段差の1.414倍', of45.travel, 141.42135, 1e-4);
+eq('45°の水平投影は段差と同じ', of45.run, 100, 1e-9);
+eq('45°の縮み代は段差の0.414倍', of45.shrink, 100 * Math.tan(Math.PI / 8), 1e-9);
+eq('倍率 = 1 ÷ sinθ', of45.multiplier, Math.SQRT2, 1e-9);
+// 現場の経験則との突き合わせ（30°で1/4、45°で3/8、60°で1/2 に近い）
+eq('30°の倍率はちょうど2.0', C.offset(100, 30).multiplier, 2, 1e-9);
+eq('30°の縮み代は段差の0.268倍', C.offset(100, 30).shrink / 100, 0.26795, 1e-5);
+eq('60°の縮み代は段差の0.577倍', C.offset(100, 60).shrink / 100, 0.57735, 1e-5);
+eq('22.5°の倍率は2.613', C.offset(100, 22.5).multiplier, 2.61313, 1e-5);
+eq('縮み代 = 斜辺 − 水平投影', of45.shrink, of45.travel - of45.run, 1e-9);
+eq('斜辺から段差を逆算すると戻る',
+  of45.travel * Math.sin(45 * Math.PI / 180), 100, 1e-9);
+check('浅い角度ほど斜辺が長い', C.offset(100, 22.5).travel > C.offset(100, 60).travel);
+throws('0°は例外', function () { C.offset(100, 0); });
+throws('90°は例外', function () { C.offset(100, 90); });
+throws('段差が数値でなければ例外', function () { C.offset(NaN, 45); });
+
+console.log('\nbendMarks（曲げの取り代・切断長）');
+var b90 = C.bendMarks(500, 400, 100, 90);
+eq('90°の接点までは半径と同じ', b90.tangent, 100, 1e-9);
+eq('90°の円弧長 = πR ÷ 2', b90.arc, Math.PI * 100 / 2, 1e-9);
+eq('90°の取り代 = R × (2 − π/2)', b90.takeup, 100 * (2 - Math.PI / 2), 1e-9);
+eq('90°の取り代は半径の0.4292倍', b90.takeup / 100, 0.42920, 1e-5);
+eq('切断長 = 外寸A + 外寸B − 取り代', b90.developed, 500 + 400 - b90.takeup, 1e-9);
+eq('曲げ始めの墨 = 外寸A − 接点まで', b90.markStart, 400, 1e-9);
+eq('曲げ終わりの墨 = 曲げ始め + 円弧長', b90.markEnd, b90.markStart + b90.arc, 1e-9);
+check('外寸が足りていれば fits=true', b90.fits === true);
+check('外寸が接点に届かなければ fits=false', C.bendMarks(50, 400, 100, 90).fits === false);
+// 角度を0に近づけると曲げがなくなり、取り代も0に近づく
+check('角度が浅いほど取り代は小さい',
+  C.bendMarks(500, 400, 100, 5).takeup < C.bendMarks(500, 400, 100, 45).takeup);
+eq('ごく浅い角度では取り代がほぼ0', C.bendMarks(500, 400, 100, 0.01).takeup, 0, 1e-6);
+eq('取り代は半径に比例', C.bendMarks(500, 400, 200, 90).takeup,
+  C.bendMarks(500, 400, 100, 90).takeup * 2, 1e-9);
+throws('半径0は例外', function () { C.bendMarks(500, 400, 0, 90); });
+throws('180°は例外', function () { C.bendMarks(500, 400, 100, 180); });
+
+console.log('\nminBendRadius（最小曲げ半径）');
+var e25 = D.findSize('E25');
+var mb = C.minBendRadius(e25.id, e25.od);
+eq('内側半径 = 内径 × 6', mb.inner, 23.0 * 6);
+eq('芯の半径 = 内側半径 + 外径 ÷ 2', mb.center, 23.0 * 6 + 25.4 / 2);
+eq('倍率は指定できる', C.minBendRadius(23.0, 25.4, 8).inner, 23.0 * 8);
+check('芯の半径は内側半径より大きい', mb.center > mb.inner);
+
+console.log('\nsaddle3 / saddle4（障害物よけ）');
+var s3 = C.saddle3(50, 22.5);
+eq('中央の角度は側面の2倍', s3.centerAngle, 45);
+eq('angle は側面の角度（saddle4 と同じ形）', s3.angle, s3.sideAngle);
+check('3方も4方も angle / height / shrink を持つ',
+  ['angle', 'height', 'shrink'].every(function (k) {
+    return s3[k] !== undefined && C.saddle4(50, 300, 22.5)[k] !== undefined;
+  }));
+eq('22.5°の墨間隔は高さの2.613倍', s3.markSpacing / 50, 2.61313, 1e-5);
+eq('墨間隔 = 高さ ÷ sinθ', s3.markSpacing, 50 / Math.sin(22.5 * Math.PI / 180), 1e-9);
+eq('縮み代 = 高さ × tan(θ/2) × 2', s3.shrink, 2 * 50 * Math.tan(11.25 * Math.PI / 180), 1e-9);
+eq('45°の3方曲げの縮み代', C.saddle3(100, 45).shrink, 2 * 100 * Math.tan(Math.PI / 8), 1e-9);
+
+var s4 = C.saddle4(50, 300, 22.5, 20);
+eq('上を通る直線部 = 幅 + 逃げ×2', s4.topRun, 300 + 40);
+eq('墨は4つ', s4.marks.length, 4);
+eq('1→2 は 高さ ÷ sinθ', s4.spans[0], 50 / Math.sin(22.5 * Math.PI / 180), 1e-9);
+eq('2→3 は上の直線部', s4.spans[1], 340);
+eq('3→4 は 1→2 と同じ', s4.spans[2], s4.spans[0], 1e-9);
+eq('合計は各区間の和', s4.total, s4.spans[0] + s4.spans[1] + s4.spans[2], 1e-9);
+eq('3方曲げと4方曲げで縮み代は同じ',
+  C.saddle4(50, 300, 22.5).shrink, C.saddle3(50, 22.5).shrink, 1e-9);
+eq('オフセット2つぶんの縮み代と一致',
+  C.saddle4(50, 300, 30).shrink, C.offset(50, 30).shrink * 2, 1e-9);
+eq('逃げを省くと0扱い', C.saddle4(50, 300, 22.5).topRun, 300);
+throws('90°は例外', function () { C.saddle3(50, 90); });
+throws('幅が数値でなければ例外', function () { C.saddle4(50, NaN, 22.5); });
+
+console.log('\nsupportLayout（サドル・支持点の割り付け）');
+var sp = C.supportLayout(5000, 2000, 300);
+// 使える長さ 4400 → 2000以下にするには3区間 → 4点
+eq('5m の金属管は4点', sp.count, 4);
+eq('実間隔 = (5000 − 600) ÷ 3', sp.span, 4400 / 3, 1e-9);
+check('実間隔は上限以下', sp.span <= 2000);
+eq('1点目は端から300', sp.positions[0], 300);
+eq('最後の点は反対の端から300', 5000 - sp.positions[3], 300, 1e-9);
+eq('点の数は count と一致', sp.positions.length, sp.count);
+check('収まっていれば ok=true', sp.ok === true);
+
+// 5m では鋼・樹脂とも4点で足りる（樹脂の実間隔 1466.7mm は 1500mm 以内）
+eq('5m は樹脂管でも4点', C.supportLayout(5000, 1500, 300).count, 4);
+check('5m の樹脂管の実間隔は上限以下', C.supportLayout(5000, 1500, 300).span <= 1500);
+// 8m まで伸ばすと差が出る
+eq('8m の金属管は5点', C.supportLayout(8000, 2000, 300).count, 5);
+eq('8m の樹脂管は6点', C.supportLayout(8000, 1500, 300).count, 6);
+check('上限が狭いほうが点は多いか同じ', [3000, 5000, 8000, 12000].every(function (L) {
+  return C.supportLayout(L, 1500, 300).count >= C.supportLayout(L, 2000, 300).count;
+}));
+check('どの長さでも実間隔は上限以下', [1000, 3000, 5000, 8000, 12000, 30000].every(function (L) {
+  return [1500, 2000].every(function (S) {
+    var r = C.supportLayout(L, S, 300);
+    return !r.ok || r.span <= S + 1e-9;
+  });
+}));
+
+eq('短い管は最低2点', C.supportLayout(1000, 2000, 300).count, 2);
+eq('端あきで場所が残らない管も2点', C.supportLayout(500, 2000, 300).count, 2);
+check('全長が上限を超える短管は ok=false', C.supportLayout(2500, 2000, 1500).ok === false);
+
+// 同じ条件なら layoutEven（外径0の管を count 本並べる）と芯位置が一致する
+var le2 = C.layoutEven(5000, 0, sp.count, 300);
+eq('layoutEven と1点目が一致', le2.positions[0], sp.positions[0], 1e-9);
+eq('layoutEven と最終点が一致', le2.positions[3], sp.positions[3], 1e-9);
+eq('layoutEven と間隔が一致', le2.pitch, sp.span, 1e-9);
+
+throws('上限0は例外', function () { C.supportLayout(5000, 0, 300); });
+throws('全長0は例外', function () { C.supportLayout(0, 2000, 300); });
+
+console.log('\n支持点の基準（寸法データ側）');
+check('全シリーズに材質と支持点間隔の上限がある', D.PIPE_SERIES.every(function (s) {
+  return (s.material === '鋼' || s.material === '樹脂') && s.maxSupportSpan > 0;
+}));
+check('鋼は2000mm、樹脂は1500mm', D.PIPE_SERIES.every(function (s) {
+  return s.maxSupportSpan === (s.material === '鋼' ? 2000 : 1500);
+}));
+is('E管は鋼', D.findSize('E25').material, '鋼');
+is('PF管は樹脂', D.findSize('PF22').material, '樹脂');
+is('PE管は鋼', D.findSize('PE:G28').material, '鋼');
+eq('VE管の上限は1500', D.findSize('VE22').maxSupportSpan, 1500);
+
 console.log('\n寸法データ');
 var sizes = D.allSizes();
 check('サイズが1件以上ある', sizes.length > 0);

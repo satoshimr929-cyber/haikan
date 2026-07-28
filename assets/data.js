@@ -14,6 +14,8 @@
   var PIPE_SERIES = [
     {
       id: 'E',
+      material: '鋼',
+      maxSupportSpan: 2000,
       name: 'ねじなし電線管',
       short: 'E管',
       std: 'JIS C 8305',
@@ -30,6 +32,8 @@
     },
     {
       id: 'C',
+      material: '鋼',
+      maxSupportSpan: 2000,
       name: '薄鋼電線管',
       short: 'C管',
       std: 'JIS C 8305',
@@ -46,6 +50,8 @@
     },
     {
       id: 'G',
+      material: '鋼',
+      maxSupportSpan: 2000,
       name: '厚鋼電線管',
       short: 'G管',
       std: 'JIS C 8305',
@@ -65,6 +71,8 @@
     },
     {
       id: 'PF',
+      material: '樹脂',
+      maxSupportSpan: 1500,
       name: '合成樹脂製可とう電線管（PF管）',
       short: 'PF管',
       std: 'JIS C 8411',
@@ -81,6 +89,8 @@
     },
     {
       id: 'CD',
+      material: '樹脂',
+      maxSupportSpan: 1500,
       name: '合成樹脂製可とう電線管（CD管）',
       short: 'CD管',
       std: 'JIS C 8411',
@@ -97,6 +107,8 @@
     },
     {
       id: 'VE',
+      material: '樹脂',
+      maxSupportSpan: 1500,
       name: '硬質ビニル電線管',
       short: 'VE管',
       std: 'JIS C 8430',
@@ -116,6 +128,8 @@
     },
     {
       id: 'PE',
+      material: '鋼',
+      maxSupportSpan: 2000,
       name: 'ポリエチライニング電線管（ねじ付き）',
       short: 'PE管',
       std: 'JIS C 8380 G形',
@@ -170,6 +184,8 @@
           seriesShort: s.short,
           std: s.std,
           approx: !!s.approx,
+          material: s.material,
+          maxSupportSpan: s.maxSupportSpan,
           key: z.key,
           name: z.name,
           label: z.label,
