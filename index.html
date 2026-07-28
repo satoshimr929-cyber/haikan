@@ -186,15 +186,25 @@
     <div class="card">
       <h2>並行配管の曲げ位置ずらし</h2>
       <p class="hint">
-        並んだ配管を同じ角度で曲げるとき、隣り合う管の曲げ位置をどれだけ前後にずらせば
-        ピッチが揃うかを出します。ずらし量 = ピッチ × tan(角度 ÷ 2)。
+        並んだ配管を同じ角度で曲げるとき、隣り合う管の曲げ位置をどれだけ前後にずらすかを出します。
+        曲げた先のピッチを手前と変えることもできます（ラックから盤へ入るときなど）。
+        ずらし量 =（曲げた先のピッチ − 手前のピッチ × cos角度）÷ sin角度。
       </p>
 
       <div class="field-row">
         <div class="field">
-          <label for="stag-pitch">芯々ピッチ</label>
+          <label for="stag-pitch">手前の芯々ピッチ</label>
           <div class="unit"><input type="number" id="stag-pitch" step="1" value="75"><span>mm</span></div>
         </div>
+        <div class="field">
+          <label for="stag-pitch2">曲げた先の芯々ピッチ</label>
+          <div class="unit">
+            <input type="number" id="stag-pitch2" step="1" placeholder="手前と同じ"><span>mm</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field-row">
         <div class="field">
           <label for="stag-angle">曲げ角度</label>
           <div class="unit"><input type="number" id="stag-angle" step="1" value="90"><span>度</span></div>

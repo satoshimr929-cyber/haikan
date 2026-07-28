@@ -195,6 +195,39 @@ function pitchAfterBend(pitch, angleDeg, stagger) {
 check('ずらさないとピッチが変わってしまう',
   Math.abs(pitchAfterBend(75, 45, 0) - 75) > 1);
 
+console.log('\nparallelStagger（曲げた先のピッチを変える）');
+eq('省略すれば手前と同じピッチ', C.parallelStagger(75, 45).pitchAfter, 75);
+eq('同じ値を渡しても結果は変わらない',
+  C.parallelStagger(75, 45, 75).stagger, C.parallelStagger(75, 45).stagger, 1e-9);
+eq('90°なら ずらし量 = 曲げた先のピッチ', C.parallelStagger(75, 90, 100).stagger, 100, 1e-9);
+eq('90°では手前のピッチはずらし量に効かない',
+  C.parallelStagger(40, 90, 100).stagger, C.parallelStagger(75, 90, 100).stagger, 1e-9);
+
+// 曲げた先のピッチが指定どおりになるかを、実際に法線へ射影して確かめる
+[[75, 100, 90], [75, 100, 45], [75, 50, 45], [75, 120, 30], [60, 60, 22.5],
+ [75, 40, 120], [100, 30, 60]].forEach(function (c) {
+  var st = C.parallelStagger(c[0], c[2], c[1]).stagger;
+  eq(c[2] + '°：' + c[0] + '→' + c[1] + ' のピッチになる',
+    pitchAfterBend2(c[0], c[2], st), c[1], 1e-9);
+});
+
+// 手前ピッチ p1・ずらし量 st で曲げたあとのピッチ（法線 (-sinθ, cosθ) への射影）
+function pitchAfterBend2(pitch, angleDeg, stagger) {
+  var t = angleDeg * Math.PI / 180;
+  return Math.abs(stagger * Math.sin(t) + pitch * Math.cos(t));
+}
+
+check('広げるときはずらし量が大きくなる',
+  C.parallelStagger(75, 45, 120).stagger > C.parallelStagger(75, 45, 75).stagger);
+check('狭めるときはずらし量が小さくなる',
+  C.parallelStagger(75, 45, 30).stagger < C.parallelStagger(75, 45, 75).stagger);
+check('大きく狭めるとずらし量は負になる（外側が手前で曲がる）',
+  C.parallelStagger(75, 45, 30).stagger < 0);
+eq('曲げた先が 手前×cos角度 ならずらし量は0',
+  C.parallelStagger(75, 60, 75 * Math.cos(Math.PI / 3)).stagger, 0, 1e-9);
+throws('曲げた先のピッチが数値でなければ例外',
+  function () { C.parallelStagger(75, 45, NaN); });
+
 console.log('\n寸法データ');
 var sizes = D.allSizes();
 check('サイズが1件以上ある', sizes.length > 0);

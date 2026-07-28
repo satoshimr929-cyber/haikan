@@ -269,18 +269,32 @@
 
   /**
    * 並行して走る配管群を同じ角度で曲げるとき、隣の管の曲げ位置をどれだけ
-   * 前後にずらすか（芯々ピッチ × tan(θ/2)）。
-   * 90°なら ずらし量 = ピッチ そのものになる。
+   * 前後にずらすか。
+   *
+   *   ずらし量 = (曲げた先のピッチ − 手前のピッチ × cosθ) ÷ sinθ
+   *
+   * どの管も曲げ角度は同じまま曲げ位置だけをずらすので、ずらし量を変えれば
+   * 曲げた先のピッチを手前と変えられる（ラックから盤へ入るときなど）。
+   * 手前と同じピッチにする場合は ピッチ × tan(θ/2) に一致する。
+   * ずらし量が負なら、外側の管のほうが手前で曲がる。
+   *
+   * @param {number} pitch        手前の芯々ピッチ
+   * @param {number} angleDeg     曲げ角度
+   * @param {number} [pitchAfter] 曲げた先の芯々ピッチ（省略時は手前と同じ）
    */
-  function parallelStagger(pitch, angleDeg) {
-    req(pitch, 'ピッチ'); req(angleDeg, '曲げ角度');
+  function parallelStagger(pitch, angleDeg, pitchAfter) {
+    req(pitch, '手前のピッチ'); req(angleDeg, '曲げ角度');
     if (angleDeg <= 0 || angleDeg >= 180) {
       throw new Error('曲げ角度は0〜180°の間で入力してください');
     }
+    var after = (pitchAfter === undefined || pitchAfter === null)
+      ? pitch : req(pitchAfter, '曲げた先のピッチ');
+    var t = angleDeg * DEG;
     return {
       pitch: pitch,
+      pitchAfter: after,
       angle: angleDeg,
-      stagger: pitch * Math.tan((angleDeg / 2) * DEG)
+      stagger: (after - pitch * Math.cos(t)) / Math.sin(t)
     };
   }
 
