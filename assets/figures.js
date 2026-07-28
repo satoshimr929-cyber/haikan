@@ -105,6 +105,7 @@
     if (!o) return '';
     var pitches = o.pitches, offsets = o.offsets, angleDeg = o.angle;
     var after = o.pitchesAfter || pitches;
+    var ods = Array.isArray(o.ods) ? o.ods : null;
     var count = offsets ? offsets.length : 0;
     if (count < 2 || !pitches || pitches.length !== count - 1) return '';
     if (!pitches.every(function (v) { return v > 0; })) return '';
@@ -139,8 +140,10 @@
     pipes.forEach(function (p) {
       [p.start, p.vertex, p.end].forEach(function (q) { xs.push(q[0]); ys.push(q[1]); });
     });
-    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
-    var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    // 管を太さのある帯で描くので、半径ぶんを囲みに足しておく
+    var halfOd = ods ? Math.max.apply(null, ods) / 2 : 0;
+    var minX = Math.min.apply(null, xs) - halfOd, maxX = Math.max.apply(null, xs) + halfOd;
+    var minY = Math.min.apply(null, ys) - halfOd, maxY = Math.max.apply(null, ys) + halfOd;
     var bw = maxX - minX, bh = maxY - minY;
     if (!(bw > 0) || !(bh > 0)) return '';
 
@@ -174,10 +177,22 @@
     var showEnds = (rowY[count - 1] - rowY[0]) * s >= 20;
 
     pipes.forEach(function (p, i) {
-      o.push('<polyline class="pipe-line" points="' +
-        [p.start, p.vertex, p.end].map(function (q) {
-          return X(q[0]).toFixed(1) + ',' + Y(q[1]).toFixed(1);
-        }).join(' ') + '"/>');
+      var pts = [p.start, p.vertex, p.end].map(function (q) {
+        return X(q[0]).toFixed(1) + ',' + Y(q[1]).toFixed(1);
+      }).join(' ');
+
+      // 外径が分かっていれば、管の太さぶんの帯にする。
+      // 外周を1枚、内側をもう1枚重ねて、管の壁が見えるようにする。
+      var w = ods && ods[i] > 0 ? ods[i] * s : 0;
+      if (w >= 5) {
+        o.push('<polyline class="pipe-wall" style="stroke-width:' + w.toFixed(1) +
+          '" points="' + pts + '"/>');
+        o.push('<polyline class="pipe-bore" style="stroke-width:' +
+          Math.max(w - 3, 1).toFixed(1) + '" points="' + pts + '"/>');
+      }
+
+      o.push('<polyline class="' + (w >= 5 ? 'pipe-center' : 'pipe-line') +
+        '" points="' + pts + '"/>');
       o.push('<circle class="vertex" cx="' + X(p.vertex[0]).toFixed(1) +
         '" cy="' + Y(p.vertex[1]).toFixed(1) + '" r="3"/>');
       if (showAll || (showEnds ? (i === 0 || i === count - 1) : i === 0)) {

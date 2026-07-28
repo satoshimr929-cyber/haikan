@@ -446,6 +446,7 @@
     // 「曲げのずらしへ送る」で使うので、いまの並びを覚えておく
     mixedLatest = {
       labels: out.items.map(function (it) { return it.label; }),
+      ods: out.items.map(function (it) { return it.od; }),
       pitches: out.pitches.slice()
     };
     mixed.toStagger.disabled = out.pitches.length === 0;
@@ -482,6 +483,7 @@
   var stag = {
     pitch: $('#stag-pitch'), pitch2: $('#stag-pitch2'),
     angle: $('#stag-angle'), count: $('#stag-count'),
+    pipe: $('#stag-pipe'), pipeOd: $('#stag-pipe-od'),
     source: $('#stag-source'), uniformRow: $('#stag-uniform-row'),
     imported: $('#stag-imported'),
     result: $('#stag-result'), figure: $('#stag-figure'),
@@ -502,9 +504,12 @@
     var after = stag.pitch2.value === '' ? undefined : parseFloat(stag.pitch2.value);
     var pitches, labels;
 
+    var ods = null;
+
     if (useMixed) {
       pitches = staggerImport.pitches;
       labels = staggerImport.labels;
+      ods = staggerImport.ods || null;
       stag.pitch2.placeholder = '手前と同じ（ばらばらのまま）';
       stag.imported.textContent = 'サイズ混在から ' + labels.length + ' 本を取り込みました（' +
         labels.join(' / ') + '）。ピッチは ' + pitches.map(fmt).join(' / ') + ' mm です。';
@@ -517,6 +522,12 @@
       pitches = [];
       for (var k = 0; k < count - 1; k++) pitches.push(pitch);
       labels = null;
+      // 図で管の太さを描くために外径を拾う（同じ管が並ぶ前提）
+      var sp = readPipe(stag.pipe, stag.pipeOd);
+      if (sp) {
+        ods = [];
+        for (var j = 0; j < count; j++) ods.push(sp.od);
+      }
     }
 
     var r;
@@ -572,6 +583,7 @@
       pitches: pitches,
       offsets: r.offsets,
       angle: angle,
+      ods: ods,
       pitchesAfter: r.pairs.map(function (p) { return p.pitchAfter; })
     });
 
@@ -1168,6 +1180,7 @@
     fillPipeSelect(two.p2, 'E25');
     fillPipeSelect(even.pipe, 'E25');
     fillPipeSelect(sup.pipe, 'E25');
+    fillPipeSelect(stag.pipe, 'E25');
     fillPipeSelect(tk.pipe, 'E25');
 
     D.PIPE_SERIES.forEach(function (s) {
@@ -1181,7 +1194,8 @@
     bind([even.pipe, even.pipeOd, even.width, even.margin, even.mode,
       even.gap, even.count, even.pitch], renderEven);
     bind([mixed.mode, mixed.gap, mixed.width, mixed.margin], renderMixed);
-    bind([stag.pitch, stag.pitch2, stag.angle, stag.count], renderStagger);
+    bind([stag.pipe, stag.pipeOd, stag.pitch, stag.pitch2, stag.angle, stag.count,
+      stag.source], renderStagger);
     bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin,
       sup.stock, sup.first, sup.extra, sup.coupling, sup.saddle,
       sup.atJoint, sup.jointOffset, sup.jointMode], renderSupport);
@@ -1197,6 +1211,7 @@
       if (!mixedLatest || !mixedLatest.pitches.length) return;
       staggerImport = {
         labels: mixedLatest.labels.slice(),
+        ods: mixedLatest.ods.slice(),
         pitches: mixedLatest.pitches.slice()
       };
       stag.source.value = 'mixed';

@@ -75,7 +75,12 @@ var CASES = [
     { 'stag-pitch2': '', 'stag-angle': '90', '@import': '#mixed-to-stagger' },
     { 'stag-angle': '45' }, { 'stag-angle': '22.5' },
     { 'stag-pitch2': '50' }, { 'stag-pitch2': '200' },
-    { 'stag-source': 'uniform', 'stag-pitch2': '' }
+    { 'stag-source': 'uniform', 'stag-pitch2': '' },
+    // 管の太さを描くケース（細い／太い／ピッチより太い／外径なし）
+    { 'stag-pipe': 'E:E19', 'stag-pitch': '75', 'stag-count': '4', 'stag-angle': '90' },
+    { 'stag-pipe': 'G:G104' }, { 'stag-pipe': 'G:G104', 'stag-pitch': '60' },
+    { 'stag-pipe': 'G:G104', 'stag-angle': '30', 'stag-count': '6' },
+    { 'stag-pipe': '__direct__' }
   ] },
   { tab: 'pitch', mode: 'support', fig: '#sup-figure', sets: [
     { 'sup-length': '5000', 'sup-stock': '', 'sup-extra': '' },
