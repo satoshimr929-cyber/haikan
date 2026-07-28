@@ -209,14 +209,23 @@
 
       <div class="msg" id="stag-imported" hidden></div>
 
-      <div class="field-row" id="stag-uniform-row">
+      <div id="stag-uniform-row">
         <div class="field">
-          <label for="stag-pitch">手前の芯々ピッチ</label>
-          <div class="unit"><input type="number" id="stag-pitch" step="1" value="75"><span>mm</span></div>
+          <label for="stag-pipe">配管</label>
+          <div class="picker">
+            <select id="stag-pipe" class="pipe-select"></select>
+            <input type="number" id="stag-pipe-od" class="od-input" step="0.1" min="0" placeholder="外径 mm" hidden>
+          </div>
         </div>
-        <div class="field">
-          <label for="stag-count">本数</label>
-          <div class="unit"><input type="number" id="stag-count" step="1" min="2" value="4"><span>本</span></div>
+        <div class="field-row">
+          <div class="field">
+            <label for="stag-pitch">手前の芯々ピッチ</label>
+            <div class="unit"><input type="number" id="stag-pitch" step="1" value="75"><span>mm</span></div>
+          </div>
+          <div class="field">
+            <label for="stag-count">本数</label>
+            <div class="unit"><input type="number" id="stag-count" step="1" min="2" value="4"><span>本</span></div>
+          </div>
         </div>
       </div>
 

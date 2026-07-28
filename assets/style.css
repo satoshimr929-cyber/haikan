@@ -326,6 +326,28 @@ select { appearance: none; background-image: none; }
   stroke-dasharray: 4 4;
 }
 .figure .vertex { fill: var(--bg-card); stroke: var(--accent); stroke-width: 2; }
+
+/* 管を太さのある帯で描くとき。外周・内側・芯線の3枚を重ねる
+   （stroke-width は外径から計算して JS 側で入れる） */
+.figure .pipe-wall {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linejoin: round;
+  stroke-linecap: butt;
+}
+.figure .pipe-bore {
+  fill: none;
+  stroke: var(--accent-soft);
+  stroke-linejoin: round;
+  stroke-linecap: butt;
+}
+.figure .pipe-center {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 8 3 2 3;
+  stroke-linejoin: round;
+}
 /* 管の接続点（カップリング）と、そこに当たっているサドル */
 .figure .coupling { fill: var(--fg-dim); opacity: .55; }
 .figure .saddle-bad { stroke: var(--bad); stroke-width: 2.5; }
