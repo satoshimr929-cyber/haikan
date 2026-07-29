@@ -141,11 +141,16 @@
   <div class="mode-panel" id="mode-mixed">
     <div class="card">
       <h2>径の違う管を並べる</h2>
-      <p class="hint">
-        左から順に並べたときの各管の芯位置を出します。あきを決めて必要な総幅を出す、
-        使える総幅を決めてあきを逆算する、隣り合う管ごとに芯々ピッチかあきを指定する、
-        の3通りから選べます。
-      </p>
+      <p class="hint">左から順に並べたときの、各管の芯位置を出します。</p>
+      <details class="more">
+        <summary>くわしく</summary>
+        <ul>
+          <li><b>あきを指定</b>：管と管のあきを決めて、必要な総幅を出します。</li>
+          <li><b>総幅を指定</b>：使える幅に収まるよう、あきを逆算します。</li>
+          <li><b>1本ずつ指定</b>：隣り合う管ごとに芯々ピッチかあきを選んで入れます。
+            図面で芯々が決まっている箇所と、あきだけ決まっている箇所を混ぜられます。</li>
+        </ul>
+      </details>
 
       <div class="field">
         <label for="mixed-mode">求めるもの</label>
@@ -193,20 +198,26 @@
       <h2>並行配管の曲げ位置ずらし</h2>
       <p class="hint">
         並んだ配管を同じ角度で曲げるとき、隣り合う管の曲げ位置をどれだけ前後にずらすかを出します。
-        曲げた先のピッチを手前と変えることもできます（ラックから盤へ入るときなど）。
-        ずらし量 =（曲げた先のピッチ − 手前のピッチ × cos角度）÷ sin角度。
-        サイズ混在で並べた配管は、そちらの「曲げのずらしへ送る」で持ち込めます
-        （径が違えばピッチも変わるので、ペアごとに計算します）。
-        ノーマルベンドを使うか現場で曲げるかを選ぶと、その曲げ半径で図を描きます
-        （どちらでもずらし量は変わりません）。ノーマルベンドなら管の切断位置も出します。
-        管どうしが当たる場合は警告と×印を出します（曲げの途中で寄ることがあります）。
-        曲げた先は芯々ピッチでも管と管のあきでも指定できます。
       </p>
+      <details class="more">
+        <summary>くわしく</summary>
+        <ul>
+          <li>曲げた先のピッチを手前と変えられます（ラックから盤へ入るときなど）。
+            芯々ピッチでも管と管のあきでも指定できます。</li>
+          <li>サイズ混在で並べた配管は、そちらの「曲げのずらしへ送る」で持ち込めます。
+            径が違えばピッチも変わるので、ペアごとに計算します。</li>
+          <li>ノーマルベンドを使うか現場で曲げるかを選べます。図の曲げ半径は変わりますが、
+            ずらし量は変わりません。ノーマルベンドなら管の切断位置も出します。</li>
+          <li>管どうしが当たる場合は警告と×印を出します。直線部では足りていても、
+            曲げの途中で寄ることがあります。</li>
+          <li>ずらし量 =（曲げた先のピッチ − 手前のピッチ × cos角度）÷ sin角度</li>
+        </ul>
+      </details>
 
       <div class="field">
-        <label for="stag-source">手前のピッチ</label>
+        <label for="stag-source">配管の並び</label>
         <select id="stag-source">
-          <option value="uniform">一定のピッチを入力</option>
+          <option value="uniform">同じ径を一定のピッチで並べる</option>
           <option value="mixed">サイズ混在から取り込んだ並び</option>
         </select>
       </div>
@@ -233,18 +244,23 @@
         </div>
       </div>
 
-      <div class="field-row">
-        <div class="field">
-          <label for="stag-after-kind">曲げた先の指定</label>
-          <select id="stag-after-kind">
-            <option value="pitch">芯々ピッチ</option>
-            <option value="gap">管と管のあき</option>
-          </select>
+      <div class="field">
+        <label for="stag-angle">曲げ角度</label>
+        <div class="unit"><input type="number" id="stag-angle" step="1" value="90"><span>度</span></div>
+        <div class="quick" id="stag-quick" data-target="stag-angle">
+          <button type="button" class="chip" data-angle="90">90°</button>
+          <button type="button" class="chip" data-angle="45">45°</button>
+          <button type="button" class="chip" data-angle="30">30°</button>
+          <button type="button" class="chip" data-angle="22.5">22.5°</button>
         </div>
-        <div class="field">
-          <label for="stag-angle">曲げ角度</label>
-          <div class="unit"><input type="number" id="stag-angle" step="1" value="90"><span>度</span></div>
-        </div>
+      </div>
+
+      <div class="field">
+        <label for="stag-after-kind">曲げた先の指定</label>
+        <select id="stag-after-kind">
+          <option value="pitch">芯々ピッチ</option>
+          <option value="gap">管と管のあき</option>
+        </select>
       </div>
 
       <div class="field">
@@ -258,8 +274,8 @@
       <div class="field">
         <label for="stag-bend">曲げ方</label>
         <select id="stag-bend">
-          <option value="normal">ノーマルベンド（既製継手・90°）</option>
-          <option value="field">現場曲げ（ベンダー・最小半径）</option>
+          <option value="normal">ノーマルベンド（既製継手）</option>
+          <option value="field">現場曲げ（最小半径）</option>
           <option value="none">半径を描かない</option>
         </select>
       </div>
@@ -269,8 +285,8 @@
         <select id="stag-insert-kind">
           <!-- 上の2つはねじなし電線管（E管）だけの選択肢。
                ねじ込み管を選んでいるあいだは JS が隠す。 -->
-          <option value="socket">B形ノーマルベンド（受口に差し込む）</option>
-          <option value="coupling">A形＋カップリング</option>
+          <option value="socket">B形ノーマルベンド（受口）</option>
+          <option value="coupling">A形＋ねじなしカップリング</option>
           <option value="none">見込まない（面まで）</option>
           <option value="manual">手入力</option>
         </select>
@@ -281,13 +297,6 @@
         <div class="unit">
           <input type="number" id="stag-insert" step="0.5" min="0" value="0"><span>mm</span>
         </div>
-      </div>
-
-      <div class="quick" id="stag-quick" data-target="stag-angle">
-        <button type="button" class="chip" data-angle="90">90°</button>
-        <button type="button" class="chip" data-angle="45">45°</button>
-        <button type="button" class="chip" data-angle="30">30°</button>
-        <button type="button" class="chip" data-angle="22.5">22.5°</button>
       </div>
 
       <div class="result" id="stag-result"></div>
@@ -302,11 +311,21 @@
     <div class="card">
       <h2>サドル・支持点の割り付け</h2>
       <p class="hint">
-        配管の全長から、サドルの数と位置を出します。上限間隔は選んだ管の材質から入りますが、
-        現場の基準に合わせて書き換えられます。管の接続点を入れると、サドルが当たらないかを
-        確認できます。樹脂管では接続点も支持の対象なので、両側に支持点を置きます
-        （「材質にしたがう」のときの動き）。
+        配管の全長から、サドルの数と位置を出します。管の接続点を入れると、
+        サドルが当たらないかも確認できます。
       </p>
+      <details class="more">
+        <summary>くわしく</summary>
+        <ul>
+          <li>支持点間隔の上限は選んだ管の材質から入りますが、現場の基準に合わせて
+            書き換えられます。</li>
+          <li>金属管では接続点にサドルが当たらないかを見て、当たれば逃がし先を出します。</li>
+          <li>樹脂管では接続点も支持の対象なので、その両側に支持点を置きます
+            （「材質にしたがう」のときの動き）。</li>
+          <li>接続点は定尺から自動で並べ、個別にも足せます。あわせて管の拾い
+            （必要な定尺の本数と切り出し）も出します。</li>
+        </ul>
+      </details>
 
       <div class="field">
         <label for="sup-pipe">配管</label>
@@ -326,7 +345,7 @@
           <div class="unit"><input type="number" id="sup-span" step="10" value="2000"><span>mm</span></div>
         </div>
         <div class="field">
-          <label for="sup-margin">端からの距離</label>
+          <label for="sup-margin">管端から支持まで</label>
           <div class="unit"><input type="number" id="sup-margin" step="10" value="300"><span>mm</span></div>
         </div>
       </div>
@@ -343,8 +362,8 @@
         <div class="field">
           <label for="sup-joint-mode">継ぎ方</label>
           <select id="sup-joint-mode">
-            <option value="stock">定尺＋半端（端から）</option>
-            <option value="even">均等（センターで継ぐ）</option>
+            <option value="stock">定尺＋半端</option>
+            <option value="even">均等（センター継ぎ）</option>
           </select>
         </div>
       </div>
@@ -360,6 +379,8 @@
         <label for="sup-extra">追加の接続点（カンマ区切り）</label>
         <input type="text" id="sup-extra" inputmode="numeric" placeholder="例）1200, 3400">
       </div>
+
+      <h3 class="sub-head">サドルとの当たり</h3>
 
       <div class="field-row">
         <div class="field">
@@ -411,9 +432,16 @@
       <h2>オフセット（振り）</h2>
       <p class="hint">
         段差を2箇所の曲げで越えるときの、曲げと曲げの間隔（墨の間隔）と縮み代を出します。
-        斜辺 = 段差 ÷ sin角度、縮み代 = 段差 × tan(角度 ÷ 2)。
-        配管を選ぶと、図を外径どおりの太さで描きます。
       </p>
+      <details class="more">
+        <summary>くわしく</summary>
+        <ul>
+          <li>斜辺（墨の間隔）= 段差 ÷ sin角度、縮み代 = 段差 × tan(角度 ÷ 2)</li>
+          <li>曲げ半径のない折れ線として計算しています。実際のベンダーでは半径のぶん
+            差が出るので、1本目は現物合わせで確かめてください。</li>
+          <li>配管を選ぶと、図を外径どおりの太さで描きます。</li>
+        </ul>
+      </details>
 
       <div class="field">
         <label for="off-pipe">配管</label>
@@ -451,11 +479,20 @@
     <div class="card">
       <h2>曲げの取り代・切断長</h2>
       <p class="hint">
-        曲げ半径のぶん、外寸の合計より管は短くて済みます。その差（取り代）と切断長、
-        曲げ始めの墨位置を出します。外寸は曲げなければ角になる点（交点）からの寸法ですが、
-        支持材や壁の面から測ることもあるので、管の面を基準にも選べます。
-        図は選んだ配管の外径どおりの太さで描きます。
+        曲げ半径のぶん、外寸の合計より管は短くて済みます。
+        その差（取り代）と切断長、曲げ始めの墨位置を出します。
       </p>
+      <details class="more">
+        <summary>くわしく</summary>
+        <ul>
+          <li>外寸は曲げなければ角になる点（交点）からの寸法です。支持材や壁の面から
+            測ることもあるので、管の面を基準にも選べます。</li>
+          <li>管を選ぶと、現場で曲げる場合の最小半径（内線規程）と、ノーマルベンドを
+            使う場合の寸法（JIS C 8330）を参考に出します。</li>
+          <li>接点まで = R × tan(角度 ÷ 2)、円弧長 = R × 角度、
+            取り代 = 接点まで × 2 − 円弧長</li>
+        </ul>
+      </details>
 
       <div class="field">
         <label for="tk-pipe">配管</label>
@@ -469,7 +506,7 @@
         <label for="tk-basis">外寸をどこで測るか</label>
         <select id="tk-basis">
           <option value="center">管の芯（交点まで）</option>
-          <option value="outer">曲げの外側の面（支持材・壁に当てる面）</option>
+          <option value="outer">曲げの外側の面（支持材・壁）</option>
           <option value="inner">曲げの内側の面</option>
         </select>
         <p class="hint" id="tk-basis-calc" hidden></p>
@@ -514,9 +551,18 @@
     <div class="card">
       <h2>障害物よけ（3方・4方曲げ）</h2>
       <p class="hint">
-        梁やダクトをまたぐときの墨位置を出します。3方曲げは中央が側面の2倍の角度になります。
-        配管を選ぶと、図を外径どおりの太さで描きます。
+        梁やダクトをまたぐときの墨位置を出します。
       </p>
+      <details class="more">
+        <summary>くわしく</summary>
+        <ul>
+          <li><b>3方曲げ</b>は中央が1箇所で、側面の2倍の角度になります。
+            <b>4方曲げ</b>は上を平らに通します。</li>
+          <li>曲げ半径のない折れ線として計算しています。実際のベンダーでは半径のぶん
+            差が出るので、1本目は現物合わせで確かめてください。</li>
+          <li>配管を選ぶと、図を外径どおりの太さで描きます。</li>
+        </ul>
+      </details>
 
       <div class="field">
         <label for="sd-pipe">配管</label>
@@ -545,6 +591,12 @@
         </div>
       </div>
 
+      <div class="quick" data-target="sd-angle">
+        <button type="button" class="chip" data-angle="22.5">22.5°</button>
+        <button type="button" class="chip" data-angle="30">30°</button>
+        <button type="button" class="chip" data-angle="45">45°</button>
+      </div>
+
       <div class="field-row" id="sd-width-row" hidden>
         <div class="field">
           <label for="sd-width">障害物の幅</label>
@@ -554,12 +606,6 @@
           <label for="sd-clear">逃げ（片側）</label>
           <div class="unit"><input type="number" id="sd-clear" step="5" value="20"><span>mm</span></div>
         </div>
-      </div>
-
-      <div class="quick" data-target="sd-angle">
-        <button type="button" class="chip" data-angle="22.5">22.5°</button>
-        <button type="button" class="chip" data-angle="30">30°</button>
-        <button type="button" class="chip" data-angle="45">45°</button>
       </div>
 
       <div class="result" id="sd-result"></div>
