@@ -692,6 +692,69 @@
           fmt(cutShift ? cut.shifts[0] : cut.total) + ' mm']
       ]);
     }
+
+    // 管どうしが当たらないか。直線部はピッチで分かるが、曲げの途中は
+    // 半径が違ったり曲げた先を詰めたりすると寄ってくるので、芯線を刻んで測る。
+    var clash = null;
+    if (ods && ods.every(function (v) { return v > 0; })) {
+      try {
+        clash = C.bendClearance({
+          offsets: r.offsets, pitches: pitches, angle: angle, ods: ods, radii: radii
+        });
+      } catch (e) { clash = null; }
+    }
+
+    if (clash) {
+      var name = function (p) {
+        return labels
+          ? (p.index + 1) + '本目と' + (p.index + 2) + '本目（' +
+            labels[p.index] + '・' + labels[p.index + 1] + '）'
+          : (p.index + 1) + '本目と' + (p.index + 2) + '本目';
+      };
+      var where = function (p) {
+        if (p.atBend) return '曲げの途中';
+        return p.pitchAfter < p.pitch ? '曲げた先の直線部' : '手前の直線部';
+      };
+      // 同じ内容が並ぶと読みにくいので、2組まで出して残りは数で言う
+      var listPairs = function (list, body) {
+        var head = list.slice(0, 2).map(body).join('、');
+        return list.length > 2 ? head + '、ほか ' + (list.length - 2) + ' 組' : head;
+      };
+      var hit = clash.pairs.filter(function (p) { return !p.ok; });
+      var tight = clash.pairs.filter(function (p) { return p.ok && p.clearance < 5; });
+      var bendTight = clash.pairs.filter(function (p) {
+        return p.ok && p.clearance >= 5 && p.atBend;
+      });
+
+      if (hit.length) {
+        html += msg('管が重なります。' + listPairs(hit, function (p) {
+          return name(p) + 'が' + where(p) + 'で ' + fmt(-p.clearance) +
+            'mm 重なります（芯々 ' + fmt(p.minCenter) + 'mm・必要 ' + fmt(p.need) + 'mm）';
+        }) + '。図の×印がその位置です。', 'bad');
+
+        var byBend = hit.some(function (p) { return p.atBend; });
+        var varyR = radii && radii.some(function (v, i) { return i && v !== radii[0]; });
+        html += msg(byBend
+          ? '直線部では足りていても、曲げの途中で寄ることがあります。' +
+            (varyR ? 'この並びは管ごとに曲げ半径が違うので、' +
+              '半径の小さい管が先に曲がりきって、隣の管の内側へ入り込みます。' : '') +
+            '曲げた先のピッチを広げるか、手前のピッチを見直してください。'
+          : hit.every(function (p) { return p.pitchAfter < p.pitch; })
+            ? '曲げた先のピッチが外径に対して狭すぎます。芯々を広げてください。'
+            : 'ピッチが外径に対して狭すぎます。芯々を広げてください。', '');
+      } else if (tight.length) {
+        html += msg('あきがほとんどありません。' + listPairs(tight, function (p) {
+          return name(p) + 'は' + where(p) + 'であき ' + fmt(p.clearance) + 'mm';
+        }) + '。サドルや継手が入るか確認してください。', 'warn');
+      } else if (bendTight.length) {
+        html += msg('直線部より曲げの途中のほうが狭くなります。' +
+          listPairs(bendTight, function (p) {
+            return name(p) + 'は芯々 ' + fmt(p.minCenter) + 'mm（あき ' +
+              fmt(p.clearance) + 'mm）まで寄ります';
+          }) + '。', '');
+      }
+    }
+
     stag.result.innerHTML = html;
 
     stag.figure.innerHTML = F.staggerSVG({
@@ -702,6 +765,7 @@
       radii: radii,
       faces: faces,
       cutBacks: cut ? cut.backs : null,
+      clashes: clash ? clash.pairs.filter(function (p) { return !p.ok; }) : null,
       pitchesAfter: r.pairs.map(function (p) { return p.pitchAfter; })
     });
 

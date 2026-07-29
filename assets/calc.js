@@ -494,6 +494,152 @@
   }
 
   /**
+   * 2本の線分がいちばん近づくところ（2D）。線分どうしなので端点までふくめて見る。
+   * @returns {{dist, pa, pb}} pa / pb はそれぞれの線分の上のいちばん近い点
+   */
+  function segmentClosest(a0, a1, b0, b1) {
+    var ux = a1[0] - a0[0], uy = a1[1] - a0[1];
+    var vx = b1[0] - b0[0], vy = b1[1] - b0[1];
+    var wx = a0[0] - b0[0], wy = a0[1] - b0[1];
+    var a = ux * ux + uy * uy, b = ux * vx + uy * vy, c = vx * vx + vy * vy;
+    var d = ux * wx + uy * wy, e = vx * wx + vy * wy;
+    var det = a * c - b * b;
+    var sN, sD = det, tN, tD = det;
+
+    if (det < 1e-12) {          // ほぼ平行。片方の始点を固定して当たりを取る
+      sN = 0; sD = 1; tN = e; tD = c;
+    } else {
+      sN = b * e - c * d;
+      tN = a * e - b * d;
+      if (sN < 0) { sN = 0; tN = e; tD = c; }
+      else if (sN > sD) { sN = sD; tN = e + b; tD = c; }
+    }
+    if (tN < 0) {
+      tN = 0;
+      if (-d < 0) sN = 0; else if (-d > a) sN = sD; else { sN = -d; sD = a; }
+    } else if (tN > tD) {
+      tN = tD;
+      if (-d + b < 0) sN = 0; else if (-d + b > a) sN = sD; else { sN = -d + b; sD = a; }
+    }
+    var sc = Math.abs(sN) < 1e-12 ? 0 : sN / sD;
+    var tc = Math.abs(tN) < 1e-12 ? 0 : tN / tD;
+    var dx = wx + sc * ux - tc * vx, dy = wy + sc * uy - tc * vy;
+    return {
+      dist: Math.sqrt(dx * dx + dy * dy),
+      pa: [a0[0] + sc * ux, a0[1] + sc * uy],
+      pb: [b0[0] + tc * vx, b0[1] + tc * vy]
+    };
+  }
+
+  /**
+   * 曲げのずらしで並べた管の芯線。直線 → 円弧 → 直線を折れ線に刻んで返す。
+   * 座標は figures.js と同じ（x は走り方向、y は下向き、曲げは上へ向かう）。
+   */
+  function bendCenterline(vx, vy, radius, t, lead, steps) {
+    var R = radius > 0 ? radius : 0;
+    var T = R > 0 ? R * Math.tan(t / 2) : 0;
+    var t1 = [vx - T, vy];
+    var pts = [[t1[0] - lead, vy], t1];
+    if (R > 0) {
+      var cx = vx - T, cy = vy - R;
+      for (var i = 1; i <= steps; i++) {
+        var f = t * i / steps;
+        pts.push([cx + R * Math.sin(f), cy + R * Math.cos(f)]);
+      }
+    }
+    var t2 = [vx + T * Math.cos(t), vy - T * Math.sin(t)];
+    if (R === 0) pts.push(t2);
+    pts.push([t2[0] + lead * Math.cos(t), t2[1] - lead * Math.sin(t)]);
+    return pts;
+  }
+
+  /**
+   * 並行配管を曲げたときに、管どうしが当たらないかを調べる。
+   *
+   * 手前と曲げた先の直線部は平行なので、あきはピッチから直に出る。
+   * 当たるのはたいてい曲げの途中で、管ごとに曲げ半径が違ったり、
+   * 曲げた先のピッチを詰めたりすると芯線が寄ってくる。そこは式で解かず、
+   * 芯線を細かく刻んで隣どうしの最短距離を測っている。
+   *
+   * @param {object} o
+   * @param {number[]} o.offsets 管ごとの曲げ位置（parallelStaggerList の offsets）
+   * @param {number[]} o.pitches 手前の芯々ピッチ（本数 − 1 個）
+   * @param {number}   o.angle   曲げ角度（度）
+   * @param {number[]} o.ods     管ごとの外径
+   * @param {number[]} [o.radii] 管ごとの曲げ半径（芯）。無ければ尖った角として見る
+   * @returns {{pairs, ok, worst}} pairs は隣り合うペアごとの結果
+   */
+  function bendClearance(o) {
+    if (!o) throw new Error('引数を渡してください');
+    var offsets = o.offsets, pitches = o.pitches, ods = o.ods;
+    if (!Array.isArray(offsets) || !Array.isArray(pitches) || !Array.isArray(ods)) {
+      throw new Error('曲げ位置・ピッチ・外径を配列で渡してください');
+    }
+    if (offsets.length < 2) throw new Error('管を2本以上渡してください');
+    if (pitches.length !== offsets.length - 1 || ods.length !== offsets.length) {
+      throw new Error('曲げ位置・ピッチ・外径の数が合っていません');
+    }
+    var angleDeg = req(o.angle, '曲げ角度');
+    if (angleDeg <= 0 || angleDeg >= 180) {
+      throw new Error('曲げ角度は0〜180°の間で入力してください');
+    }
+    var radii = Array.isArray(o.radii) ? o.radii : null;
+    var t = angleDeg * DEG;
+    var sin = Math.sin(t), cos = Math.cos(t);
+
+    var rowY = [0], i;
+    for (i = 0; i < pitches.length; i++) rowY.push(rowY[i] + pitches[i]);
+
+    // 直線部まで見に行く長さ。曲げの前後で確実に平行部へ抜けるだけ取る
+    var maxR = radii ? Math.max.apply(null, radii.map(Math.abs)) : 0;
+    var spread = Math.max.apply(null, offsets) - Math.min.apply(null, offsets);
+    var lead = (maxR * Math.abs(Math.tan(t / 2)) + spread +
+      Math.max.apply(null, pitches)) * 2 + 50;
+
+    var lines = offsets.map(function (vx, k) {
+      return bendCenterline(vx, rowY[k], radii ? radii[k] : 0, t, lead, 72);
+    });
+
+    var pairs = [], worst = null;
+    for (i = 0; i < lines.length - 1; i++) {
+      var A = lines[i], B = lines[i + 1];
+      var min = Infinity, at = null;
+      for (var m = 0; m < A.length - 1; m++) {
+        for (var n = 0; n < B.length - 1; n++) {
+          var d = segmentClosest(A[m], A[m + 1], B[n], B[n + 1]);
+          if (d.dist < min) {
+            min = d.dist;
+            at = [(d.pa[0] + d.pb[0]) / 2, (d.pa[1] + d.pb[1]) / 2];
+          }
+        }
+      }
+      var need = (ods[i] + ods[i + 1]) / 2;
+      // 直線部のあきはピッチそのもの。曲げの先のピッチは幾何から出す
+      var after = (offsets[i + 1] - offsets[i]) * sin + pitches[i] * cos;
+      var straight = Math.min(pitches[i], after);
+      var pair = {
+        index: i,
+        pitch: pitches[i],
+        pitchAfter: after,
+        minCenter: min,
+        need: need,
+        clearance: min - need,
+        at: at,                          // いちばん寄るところ（芯線どうしの中点）
+        atBend: min < straight - 0.2,    // いちばん狭いのが曲げの途中か
+        ok: min - need >= 0
+      };
+      pairs.push(pair);
+      if (!worst || pair.clearance < worst.clearance) worst = pair;
+    }
+
+    return {
+      pairs: pairs,
+      worst: worst,
+      ok: pairs.every(function (p) { return p.ok; })
+    };
+  }
+
+  /**
    * ノーマルベンド（既製継手）を使うときの、管の切断位置。
    *
    * 継手は交点をまたいで据わるので、管はそこまで届かない。面間寸法 L
@@ -853,6 +999,7 @@
     layoutMixedInWidth: layoutMixedInWidth,
     parallelStagger: parallelStagger,
     parallelStaggerList: parallelStaggerList,
+    bendClearance: bendClearance,
     normalBendCuts: normalBendCuts,
     offset: offset,
     bendMarks: bendMarks,

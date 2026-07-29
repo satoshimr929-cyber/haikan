@@ -107,7 +107,18 @@ var CASES = [
     // サイズ混在から取り込むと、管ごとに面間寸法が変わる
     { '@import': '#mixed-to-stagger', 'stag-pitch2': '', 'stag-angle': '90' },
     { 'stag-insert': '40' }, { 'stag-bend': 'field' }, { 'stag-bend': 'normal' },
-    { 'stag-source': 'uniform', 'stag-insert': '0' }
+    { 'stag-source': 'uniform', 'stag-insert': '0' },
+    // 管どうしが当たるケース（×印が出る）
+    { 'stag-pipe': 'G:G104', 'stag-pitch': '150', 'stag-count': '4', 'stag-angle': '90',
+      'stag-bend': 'normal', 'stag-pitch2': '80' },                 // 曲げた先で当たる
+    { 'stag-pitch': '80', 'stag-pitch2': '' },                      // 手前で当たる
+    { 'stag-pitch': '150', 'stag-pitch2': '120', 'stag-bend': 'field' },
+    { 'stag-angle': '30' }, { 'stag-angle': '150' },
+    { 'stag-pipe': 'E:E19', 'stag-pitch': '20', 'stag-count': '12', 'stag-angle': '90' },
+    { '@import': '#mixed-to-stagger', 'stag-pitch2': '40', 'stag-angle': '90' },
+    { 'stag-pitch2': '' }, { 'stag-bend': 'normal' },
+    { 'stag-source': 'uniform', 'stag-pipe': 'E:E25', 'stag-pitch': '75',
+      'stag-count': '4', 'stag-pitch2': '' }
   ] },
   { tab: 'pitch', mode: 'support', fig: '#sup-figure', sets: [
     { 'sup-length': '5000', 'sup-stock': '', 'sup-extra': '' },

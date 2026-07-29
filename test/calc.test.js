@@ -724,6 +724,84 @@ is('PE管の品番が引ける', D.findSize('PE:G28').code, 'DWL28K');
 eq('小文字でも引ける', D.findSize('e25').od, 25.4);
 check('無いサイズは null', D.findSize('X99') === null);
 
+console.log('\nbendClearance（曲げたときに管どうしが当たらないか）');
+// 同じ半径・同じピッチのままなら、曲げても間隔は変わらない
+var st1 = C.parallelStaggerList([75, 75, 75], 90);
+var cl1 = C.bendClearance({
+  offsets: st1.offsets, pitches: [75, 75, 75], angle: 90,
+  ods: [25.4, 25.4, 25.4, 25.4], radii: [120, 120, 120, 120]
+});
+check('同じ半径・同じピッチなら曲げても間隔はピッチのまま',
+  cl1.pairs.every(function (p) { return Math.abs(p.minCenter - 75) < 0.1; }));
+check('曲げの途中で狭くはならない', cl1.pairs.every(function (p) { return !p.atBend; }));
+eq('必要な芯々は外径の平均', cl1.pairs[0].need, 25.4);
+eq('あき = 芯々 − 必要', cl1.pairs[0].clearance, 75 - 25.4, 0.1);
+check('当たっていなければ ok', cl1.ok === true);
+
+// 曲げ半径を渡さなくても（尖った角）、平行部の間隔は同じ
+var cl2 = C.bendClearance({
+  offsets: st1.offsets, pitches: [75, 75, 75], angle: 90, ods: [25.4, 25.4, 25.4, 25.4]
+});
+check('半径なしでも同じ結果',
+  cl2.pairs.every(function (p, i) { return Math.abs(p.minCenter - cl1.pairs[i].minCenter) < 0.2; }));
+
+// 曲げた先のピッチを外径より狭くすると、直線部で当たる
+var st2 = C.parallelStaggerList([150, 150], 90, 80);
+var cl3 = C.bendClearance({
+  offsets: st2.offsets, pitches: [150, 150], angle: 90,
+  ods: [113.4, 113.4, 113.4], radii: [395, 395, 395]
+});
+check('曲げた先が狭ければ当たる', cl3.ok === false);
+check('当たる場所は直線部', cl3.pairs.every(function (p) { return !p.atBend; }));
+eq('いちばん狭いのは曲げた先のピッチ', cl3.pairs[0].minCenter, 80, 0.2);
+eq('曲げた先のピッチを幾何から拾えている', cl3.pairs[0].pitchAfter, 80, 1e-6);
+eq('重なり量', cl3.pairs[0].clearance, 80 - 113.4, 0.2);
+
+// 半径が違うと、直線部は足りていても曲げの途中で寄る
+var st3 = C.parallelStaggerList([48.6, 61.3], 90, 40);
+var cl4 = C.bendClearance({
+  offsets: st3.offsets, pitches: [48.6, 61.3], angle: 90,
+  ods: [25.4, 31.8, 51.0], radii: [150.7, 189.9, 313.4]
+});
+check('半径違いは曲げの途中で当たる', cl4.pairs[1].ok === false && cl4.pairs[1].atBend);
+check('曲げの途中は直線部より狭い',
+  cl4.pairs[1].minCenter < Math.min(cl4.pairs[1].pitch, cl4.pairs[1].pitchAfter));
+check('当たる位置を返す', Array.isArray(cl4.pairs[1].at) && cl4.pairs[1].at.length === 2);
+
+// ピッチを変えなくても、半径が違うだけで曲げの途中だけが当たる
+var st4 = C.parallelStaggerList([48.6, 61.3], 90);
+var cl4b = C.bendClearance({
+  offsets: st4.offsets, pitches: [48.6, 61.3], angle: 90,
+  ods: [25.4, 31.8, 51.0], radii: [150.7, 189.9, 313.4]
+});
+check('直線部は足りている',
+  Math.min(cl4b.pairs[1].pitch, cl4b.pairs[1].pitchAfter) > cl4b.pairs[1].need);
+check('それでも曲げの途中で当たる', cl4b.pairs[1].ok === false && cl4b.pairs[1].atBend);
+check('当たっていない組は ok', cl4.pairs[0].ok === true);
+check('全体としては当たり', cl4.ok === false);
+is('worst はいちばんあきの小さい組', String(cl4.worst.index), '1');
+
+// 半径を大きいほうへ揃えれば、曲げの途中でも寄らなくなる
+var cl5 = C.bendClearance({
+  offsets: st3.offsets, pitches: [48.6, 61.3], angle: 90,
+  ods: [25.4, 31.8, 51.0], radii: [313.4, 313.4, 313.4]
+});
+check('半径を揃えると曲げの途中では狭くならない',
+  cl5.pairs.every(function (p) { return !p.atBend; }));
+
+throws('外径を渡さなければ例外', function () {
+  C.bendClearance({ offsets: [0, 75], pitches: [75], angle: 90 });
+});
+throws('数が合わなければ例外', function () {
+  C.bendClearance({ offsets: [0, 75], pitches: [75, 75], angle: 90, ods: [25.4, 25.4] });
+});
+throws('管が1本なら例外', function () {
+  C.bendClearance({ offsets: [0], pitches: [], angle: 90, ods: [25.4] });
+});
+throws('角度が範囲外なら例外', function () {
+  C.bendClearance({ offsets: [0, 75], pitches: [75], angle: 180, ods: [25.4, 25.4] });
+});
+
 console.log('\nnormalBendCuts（ノーマルベンドを使うときの切断位置）');
 // 同じ呼びで揃えた並び：面間寸法が同じなので、切断位置は交点と同じだけずれる
 var cutA = C.normalBendCuts([0, 75, 150, 225], [170, 170, 170, 170]);
