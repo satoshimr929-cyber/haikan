@@ -452,7 +452,8 @@
       <h2>曲げの取り代・切断長</h2>
       <p class="hint">
         曲げ半径のぶん、外寸の合計より管は短くて済みます。その差（取り代）と切断長、
-        曲げ始めの墨位置を出します。外寸は曲げなければ角になる点（交点）からの寸法です。
+        曲げ始めの墨位置を出します。外寸は曲げなければ角になる点（交点）からの寸法ですが、
+        支持材や壁の面から測ることもあるので、管の面を基準にも選べます。
         図は選んだ配管の外径どおりの太さで描きます。
       </p>
 
@@ -462,6 +463,16 @@
           <select id="tk-pipe" class="pipe-select"></select>
           <input type="number" id="tk-pipe-od" class="od-input" step="0.1" min="0" placeholder="外径 mm" hidden>
         </div>
+      </div>
+
+      <div class="field">
+        <label for="tk-basis">外寸をどこで測るか</label>
+        <select id="tk-basis">
+          <option value="center">管の芯（交点まで）</option>
+          <option value="outer">曲げの外側の面（支持材・壁に当てる面）</option>
+          <option value="inner">曲げの内側の面</option>
+        </select>
+        <p class="hint" id="tk-basis-calc" hidden></p>
       </div>
 
       <div class="field-row">

@@ -330,6 +330,52 @@ eq('芯の半径 = 内側半径 + 外径 ÷ 2', mb.center, 23.0 * 6 + 25.4 / 2);
 eq('倍率は指定できる', C.minBendRadius(23.0, 25.4, 8).inner, 23.0 * 8);
 check('芯の半径は内側半径より大きい', mb.center > mb.inner);
 
+console.log('\nlegBasisShift（外寸をどこで測るか）');
+// 曲げの外側の面どうしが交わる角は、脚に沿って (外径÷2)×tan(角度÷2) だけ外へずれる
+eq('E25 90°：外側の面は 12.7mm 外へ', C.legBasisShift(25.4, 90, 'outer'), 25.4 / 2);
+eq('内側の面は同じだけ内へ', C.legBasisShift(25.4, 90, 'inner'), -25.4 / 2);
+eq('芯基準ならずれない', C.legBasisShift(25.4, 90, 'center'), 0);
+eq('45°', C.legBasisShift(25.4, 45, 'outer'), 12.7 * Math.tan(22.5 * Math.PI / 180), 1e-9);
+eq('太い管ほど大きくずれる', C.legBasisShift(113.4, 90, 'outer'), 113.4 / 2);
+check('角度が浅いほどずれは小さい',
+  C.legBasisShift(25.4, 10, 'outer') < C.legBasisShift(25.4, 90, 'outer'));
+check('角度が深いほどずれは大きい',
+  C.legBasisShift(25.4, 135, 'outer') > C.legBasisShift(25.4, 90, 'outer'));
+eq('外径が分からなければ0', C.legBasisShift(0, 90, 'outer'), 0);
+eq('知らない基準は芯あつかい', C.legBasisShift(25.4, 90, 'x'), 0);
+throws('角度が範囲外なら例外', function () { C.legBasisShift(25.4, 180, 'outer'); });
+
+/* 式とは別に、2本の芯線を外へずらして交点を出し直して突き合わせる。
+ * 脚Aは y=0 を左から交点(0,0)へ、脚Bは角度θで出ていく（曲げは上＝−y へ）。
+ * 外側は +y 側なので、両方の直線を +e ずらした交点の x 座標が、脚に沿ったずれ量。 */
+function outerCornerX(od, angleDeg) {
+  var t = angleDeg * Math.PI / 180, e = od / 2;
+  var n = [Math.sin(t), Math.cos(t)];               // 脚Bの外側を向く法線
+  var p0 = [e * n[0], e * n[1]];                    // ずらした脚B上の1点
+  var u = [Math.cos(t), -Math.sin(t)];              // 脚Bの向き
+  var k = (e - p0[1]) / u[1];                       // y = e になる位置
+  return p0[0] + k * u[0];
+}
+[[25.4, 90], [25.4, 45], [25.4, 22.5], [113.4, 90], [59.6, 135], [19.1, 60]]
+  .forEach(function (cs) {
+    eq('作図で出した外側の角と一致（外径' + cs[0] + ' / ' + cs[1] + '°）',
+      C.legBasisShift(cs[0], cs[1], 'outer'), outerCornerX(cs[0], cs[1]), 1e-9);
+  });
+
+// 基準を変えても、指している管は同じもの。切断長も墨の位置も変わらない
+var shOut = C.legBasisShift(25.4, 90, 'outer');
+var byCenter = C.bendMarks(500, 400, 200, 90);
+// 外面で 512.7 / 412.7 と測った管は、芯で 500 / 400 と測った管と同じ
+var byOuter = C.bendMarks(500 + shOut - shOut, 400 + shOut - shOut, 200, 90);
+eq('外面の入力を芯へ直すと同じ切断長', byOuter.developed, byCenter.developed);
+eq('墨の位置も同じ', byOuter.markStart, byCenter.markStart);
+eq('取り代は基準によらない', byOuter.takeup, byCenter.takeup);
+// 同じ数字を入れたまま基準だけ変えれば、当然ちがう管になる
+var asOuter = C.bendMarks(500 - shOut, 400 - shOut, 200, 90);
+eq('外面で500と測ると、芯なら500の管より短い',
+  asOuter.developed, byCenter.developed - 2 * shOut, 1e-9);
+check('その差は面と交点のずれの2本分', Math.abs(byCenter.developed - asOuter.developed - 25.4) < 1e-9);
+
 console.log('\nsaddle3 / saddle4（障害物よけ）');
 var s3 = C.saddle3(50, 22.5);
 eq('中央の角度は側面の2倍', s3.centerAngle, 45);
