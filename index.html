@@ -255,9 +255,19 @@
       </div>
 
       <div class="field" id="stag-insert-field">
-        <label for="stag-insert">継手への差し込み深さ</label>
+        <label for="stag-insert-kind">継手への差し込み</label>
+        <select id="stag-insert-kind">
+          <option value="socket">B形ノーマルベンド（受口に差し込む）</option>
+          <option value="coupling">A形＋カップリング</option>
+          <option value="none">見込まない（面まで）</option>
+          <option value="manual">手入力</option>
+        </select>
+      </div>
+
+      <div class="field" id="stag-insert-manual" hidden>
+        <label for="stag-insert">差し込み深さ</label>
         <div class="unit">
-          <input type="number" id="stag-insert" step="1" min="0" value="0"><span>mm</span>
+          <input type="number" id="stag-insert" step="0.5" min="0" value="0"><span>mm</span>
         </div>
       </div>
 

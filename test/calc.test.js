@@ -802,6 +802,34 @@ throws('角度が範囲外なら例外', function () {
   C.bendClearance({ offsets: [0, 75], pitches: [75], angle: 180, ods: [25.4, 25.4] });
 });
 
+console.log('\n継手への差し込み寸法（ねじなし電線管）');
+var FI = D.FITTING_INSERT;
+var fiKeys = Object.keys(FI);
+eq('E管の全7サイズに値がある', fiKeys.length, D.findSeries('E').sizes.length);
+check('E管以外は持っていない', fiKeys.every(function (k) { return k.indexOf('E:') === 0; }));
+check('カップリング全長はほぼ差し込み深さの2倍', fiKeys.every(function (k) {
+  return Math.abs(FI[k].couplingLength - FI[k].coupling * 2) <= 1;
+}));
+check('呼びが大きいほど深く差し込む', D.findSeries('E').sizes.every(function (z, i, a) {
+  return i === 0 || FI[z.key].coupling > FI[a[i - 1].key].coupling;
+}));
+check('受口の深さも呼びとともに大きくなる', D.findSeries('E').sizes.every(function (z, i, a) {
+  return i === 0 || FI[z.key].socket > FI[a[i - 1].key].socket;
+}));
+check('差し込み深さは面間寸法より浅い', fiKeys.every(function (k) {
+  var nb = D.findNormalBend(k);
+  return !nb || (FI[k].socket < nb.l && FI[k].coupling < nb.l);
+}));
+eq('E25 の受口は 34mm', D.findFittingInsert('E:E25').socket, 34);
+eq('E25 のカップリングは片側 33mm', D.findFittingInsert('E:E25').coupling, 33);
+eq('E25 のカップリング全長は 66mm', D.findFittingInsert('E:E25').couplingLength, 66);
+eq('E75 の受口は 60mm', D.findFittingInsert('E75').socket, 60);
+check('ねじ込み接続の管には表が無い',
+  ['C:C25', 'G:G28', 'PE:G28', 'PF:PF16', 'VE:VE16'].every(function (k) {
+    return D.findFittingInsert(k) === null;
+  }));
+check('無いサイズは null', D.findFittingInsert('X99') === null);
+
 console.log('\nnormalBendCuts（ノーマルベンドを使うときの切断位置）');
 // 同じ呼びで揃えた並び：面間寸法が同じなので、切断位置は交点と同じだけずれる
 var cutA = C.normalBendCuts([0, 75, 150, 225], [170, 170, 170, 170]);
@@ -816,7 +844,20 @@ var cutB = C.normalBendCuts([0, 75, 150, 225], [170, 170, 170, 170], 30);
 check('差し込んでも切断位置の相対関係は変わらない',
   cutB.cuts.every(function (v, i) { return Math.abs(v - cutA.cuts[i]) < 1e-9; }));
 eq('戻す距離は面間寸法 − 差し込み深さ', cutB.backs[0], 140);
-eq('差し込み深さを覚えている', cutB.insert, 30);
+check('差し込み深さは管ごとの配列で返る',
+  cutB.insert.length === 4 && cutB.insert.every(function (v) { return v === 30; }));
+
+// 呼びが混ざると差し込み深さも変わるので、管ごとに渡せる
+var cutE = C.normalBendCuts([0, 75, 150], [170, 210, 330], [33, 38, 47.5]);
+eq('管ごとの差し込み深さが効く（1本目）', cutE.backs[0], 170 - 33);
+eq('管ごとの差し込み深さが効く（3本目）', cutE.backs[2], 330 - 47.5);
+eq('切断位置にも管ごとの値が乗る', cutE.cuts[1], (75 - 210 + 38) - (0 - 170 + 33), 1e-9);
+throws('差し込み深さの数が合わなければ例外', function () {
+  C.normalBendCuts([0, 75], [170, 170], [30]);
+});
+throws('管ごとの値に負が混ざれば例外', function () {
+  C.normalBendCuts([0, 75], [170, 170], [30, -1]);
+});
 
 // サイズが混ざると面間寸法が変わり、切断位置のずれは交点のずれと一致しなくなる
 var e25 = D.findNormalBend('E:E25'), e31 = D.findNormalBend('E:E31');
