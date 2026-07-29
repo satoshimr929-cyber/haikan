@@ -452,6 +452,11 @@
         var nb = p.size ? D.findNormalBend(p.size.key) : null;
         return nb ? nb.r : 0;
       }),
+      // 面間寸法（交点から継手の端まで）。切断位置を出すのに使う
+      faces: pipes.map(function (p) {
+        var nb = p.size ? D.findNormalBend(p.size.key) : null;
+        return nb ? nb.l : 0;
+      }),
       // 現場曲げ（ベンダー）の最小曲げ半径（芯）。外径だけの入力では出せない
       fieldRadii: pipes.map(function (p) {
         return p.size ? C.minBendRadius(p.size.id, p.size.od).center : 0;
@@ -498,7 +503,8 @@
     source: $('#stag-source'), uniformRow: $('#stag-uniform-row'),
     imported: $('#stag-imported'), note: $('#stag-note'),
     result: $('#stag-result'), figure: $('#stag-figure'),
-    marks: $('#stag-marks'), quick: $('#stag-quick'), bend: $('#stag-bend')
+    marks: $('#stag-marks'), quick: $('#stag-quick'), bend: $('#stag-bend'),
+    insert: $('#stag-insert'), insertField: $('#stag-insert-field')
   };
 
   // サイズ混在から持ち込んだ並び（{labels:[], pitches:[]}）。無ければ null
@@ -517,6 +523,7 @@
 
     var ods = null;
     var normalR = null;   // ノーマルベンド（既製継手）の芯の曲げ半径。無い呼びは 0
+    var normalL = null;   // 同じく面間寸法（交点から継手の端まで）。無い呼びは 0
     var fieldR = null;    // 現場曲げ（ベンダー）の最小曲げ半径（芯）。内径不明なら 0
     var bend = null, bendLabel = '', bendMaterial = '';  // 一定ピッチのときの管の情報
 
@@ -525,6 +532,7 @@
       labels = staggerImport.labels;
       ods = staggerImport.ods || null;
       normalR = staggerImport.radii || null;
+      normalL = staggerImport.faces || null;
       fieldR = staggerImport.fieldRadii || null;
       // 1本でも樹脂管が混ざっていれば、条文未確認である旨を添える
       if ((staggerImport.materials || []).indexOf('樹脂') >= 0) bendMaterial = '樹脂';
@@ -549,9 +557,12 @@
         bend = nb;
         bendLabel = sp.label;
         bendMaterial = sp.size ? sp.size.material : '';
-        ods = []; normalR = []; fieldR = [];
+        ods = []; normalR = []; normalL = []; fieldR = [];
         for (var j = 0; j < count; j++) {
-          ods.push(sp.od); normalR.push(nb ? nb.r : 0); fieldR.push(fr);
+          ods.push(sp.od);
+          normalR.push(nb ? nb.r : 0);
+          normalL.push(nb ? nb.l : 0);
+          fieldR.push(fr);
         }
       }
     }
@@ -603,13 +614,12 @@
         '曲げ位置のずらし方だけで曲げた先のピッチを ' +
         fmt(r.pairs[0].pitchAfter) + 'mm に揃えています。', '');
     }
-    stag.result.innerHTML = html;
-
     // 曲げ方（ノーマルベンド／現場曲げ／半径なし）で、図に描く曲げ半径を決める。
     // どの管も同じ半径で曲げるかぎり曲げ位置のずらし量は変わらないので、計算はそのまま。
     var way = stag.bend.value;
     var isRight = Math.abs(angle - 90) < 1e-9;   // ノーマルベンドは90°の継手だけ
-    var radii = null, note = '', noteKind = '';
+    var radii = null, faces = null, note = '', noteKind = '';
+    stag.insertField.hidden = way !== 'normal';
 
     if (way === 'normal') {
       if (!isRight) {
@@ -618,6 +628,7 @@
         noteKind = 'warn';
       } else if (normalR && normalR.some(function (v) { return v > 0; })) {
         radii = normalR;
+        faces = normalL;
         var uniq = radii.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
         note = 'ノーマルベンドの曲げ半径（芯）' + uniq.map(fmt).join(' / ') +
           'mm で描いています。JIS C 8330 の規定寸法なので、メーカーによる違いはありません。';
@@ -658,30 +669,83 @@
       }
     }
 
+    // ノーマルベンドを使うなら、管は交点まで届かない。継手の端が来る位置で切る。
+    // サイズが混ざると管ごとに面間寸法が変わるので、切断位置のずれは
+    // 曲げ位置（交点）のずれとは一致しない。そこを表と図で見えるようにする。
+    var cut = null;
+    if (faces && faces.some(function (v) { return v > 0; })) {
+      var insert = parseFloat(stag.insert.value);
+      if (!(insert >= 0)) insert = 0;
+      try {
+        cut = C.normalBendCuts(r.offsets, faces, insert);
+      } catch (e) { cut = null; }
+    }
+
+    if (cut) {
+      var backs = cut.backs.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
+      var cutShift = cut.shifts.every(function (v) {
+        return Math.abs(v - cut.shifts[0]) < 1e-6;
+      });
+      html += kv([
+        ['交点から切断位置まで', backs.map(fmt).join(' / ') + ' mm'],
+        [cutShift ? '切断位置のずらし量' : '端から端の切断位置の差',
+          fmt(cutShift ? cut.shifts[0] : cut.total) + ' mm']
+      ]);
+    }
+    stag.result.innerHTML = html;
+
     stag.figure.innerHTML = F.staggerSVG({
       pitches: pitches,
       offsets: r.offsets,
       angle: angle,
       ods: ods,
       radii: radii,
+      faces: faces,
+      cutBacks: cut ? cut.backs : null,
       pitchesAfter: r.pairs.map(function (p) { return p.pitchAfter; })
     });
+
+    if (cut) {
+      var uniqB = cut.backs.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
+      note += ' 管は交点まで届かないので、交点から手前へ ' + uniqB.map(fmt).join(' / ') +
+        'mm 戻った位置で切ります（図の赤い線）。';
+      if (cut.insert > 0) {
+        note += ' 継手の面間寸法から、差し込み深さ ' + fmt(cut.insert) + 'mm を引いた値です。';
+      } else {
+        note += ' これは継手の面間寸法そのもので、差し込む・ねじ込む深さは含んでいません' +
+          '（JIS に規定がなく製品で違うため）。差し込むぶんを見込むなら' +
+          '「継手への差し込み深さ」に入れてください。';
+      }
+      if (cut.backs.some(function (v, i) { return faces[i] > 0 && v <= 0; })) {
+        note += ' 差し込み深さが面間寸法以上になっています。値を見直してください。';
+        noteKind = 'warn';
+      }
+      if (!cut.ok) note += ' 継手が無い呼びの管は、切断位置を出していません。';
+    }
 
     stag.note.className = 'msg' + (noteKind ? ' ' + noteKind : '');
     stag.note.textContent = note;
     stag.note.hidden = !note;
 
     var rows = r.offsets.map(function (x, i) {
+      var has = cut && faces[i] > 0;
       return '<tr><td>' + (i + 1) + '</td>' +
         (labels ? '<td>' + esc(labels[i]) + '</td>' : '') +
         '<td>' + (i === 0 ? '—' : fmt(pitches[i - 1])) + '</td>' +
         '<td>' + (i === 0 ? '—' : fmt(shifts[i - 1])) + '</td>' +
-        '<td>' + fmt(x) + '</td></tr>';
+        '<td>' + fmt(x) + '</td>' +
+        (cut ? '<td>' + (has ? fmt(cut.backs[i]) : '—') + '</td>' +
+          '<td>' + (i === 0 ? '—' : (has && faces[i - 1] > 0 ? fmt(cut.shifts[i - 1]) : '—')) +
+          '</td><td class="strong">' + (has ? fmt(cut.cuts[i]) : '—') + '</td>' : '') +
+        '</tr>';
     }).join('');
     stag.marks.innerHTML =
       '<table><thead><tr><th>本</th>' + (labels ? '<th>管</th>' : '') +
       '<th>前との<br>ピッチ</th><th>前から<br>ずらす</th>' +
-      '<th>1本目<br>から</th></tr></thead><tbody>' + rows + '</tbody></table>';
+      '<th>交点<br>1本目から</th>' +
+      (cut ? '<th>交点から<br>戻す</th><th>切断位置<br>前からずらす</th>' +
+        '<th>切断位置<br>1本目から</th>' : '') +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   /* ------------------------------------------- モード5：サドル・支持点 */
@@ -1294,7 +1358,7 @@
       even.gap, even.count, even.pitch], renderEven);
     bind([mixed.mode, mixed.gap, mixed.width, mixed.margin], renderMixed);
     bind([stag.pipe, stag.pipeOd, stag.pitch, stag.pitch2, stag.angle, stag.count,
-      stag.source, stag.bend], renderStagger);
+      stag.source, stag.bend, stag.insert], renderStagger);
     bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin,
       sup.stock, sup.first, sup.extra, sup.coupling, sup.saddle,
       sup.atJoint, sup.jointOffset, sup.jointMode], renderSupport);
@@ -1312,6 +1376,7 @@
         labels: mixedLatest.labels.slice(),
         ods: mixedLatest.ods.slice(),
         radii: mixedLatest.radii.slice(),
+        faces: mixedLatest.faces.slice(),
         fieldRadii: mixedLatest.fieldRadii.slice(),
         materials: mixedLatest.materials.slice(),
         pitches: mixedLatest.pitches.slice()

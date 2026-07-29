@@ -98,7 +98,16 @@ var CASES = [
     { 'stag-pipe': 'PF:PF16', 'stag-pitch': '40', 'stag-angle': '45' },
     { 'stag-pipe': '__direct__', 'stag-angle': '90' },  // 外径だけでは出せない
     { 'stag-pipe': 'E:E25', 'stag-bend': 'none' },      // 半径を描かない
-    { 'stag-bend': 'normal', 'stag-pitch': '75', 'stag-count': '4' }
+    { 'stag-bend': 'normal', 'stag-pitch': '75', 'stag-count': '4' },
+    // 継手への差し込み深さ（切断位置が面より内側へ入る）
+    { 'stag-insert': '30' }, { 'stag-insert': '170' }, { 'stag-insert': '300' },
+    { 'stag-pipe': 'G:G104', 'stag-insert': '0', 'stag-pitch': '150' },
+    { 'stag-pipe': 'E:E19', 'stag-pitch': '40', 'stag-count': '10' },  // 継手が密に並ぶ
+    { 'stag-pipe': 'E:E25', 'stag-pitch': '75', 'stag-count': '4', 'stag-pitch2': '150' },
+    // サイズ混在から取り込むと、管ごとに面間寸法が変わる
+    { '@import': '#mixed-to-stagger', 'stag-pitch2': '', 'stag-angle': '90' },
+    { 'stag-insert': '40' }, { 'stag-bend': 'field' }, { 'stag-bend': 'normal' },
+    { 'stag-source': 'uniform', 'stag-insert': '0' }
   ] },
   { tab: 'pitch', mode: 'support', fig: '#sup-figure', sets: [
     { 'sup-length': '5000', 'sup-stock': '', 'sup-extra': '' },

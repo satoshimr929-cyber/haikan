@@ -493,6 +493,58 @@
     };
   }
 
+  /**
+   * ノーマルベンド（既製継手）を使うときの、管の切断位置。
+   *
+   * 継手は交点をまたいで据わるので、管はそこまで届かない。面間寸法 L
+   * （交点から継手の端まで = 曲げ半径 R + 直線部 a）だけ手前で切る。
+   * 継手へ差し込む・ねじ込む深さは JIS に規定がなく製品で違うので、
+   * insert で足せるようにしてある（差し込むぶんだけ管は長く残す）。
+   *
+   * サイズが混ざると管ごとに L が変わるので、切断位置のずれは
+   * 曲げ位置（交点）のずれとは一致しない。そこが手計算で狂いやすい。
+   *
+   * @param {number[]} offsets 管ごとの交点の位置（parallelStaggerList の offsets）
+   * @param {number[]} faces   管ごとの面間寸法 L。継手が無い管は 0 を渡す
+   * @param {number} [insert]  継手への差し込み深さ。既定 0
+   * @returns {{cuts, shifts, backs, total, insert, ok}}
+   *   cuts   1本目の切断位置を 0 とした、管ごとの切断位置
+   *   shifts 隣り合う管の切断位置の差（前の管から次の管へのずれ）
+   *   backs  交点から切断位置まで戻る距離（= 面間寸法 − 差し込み深さ）。
+   *          現場で実際に測る値。継手が無い管は 0
+   *   ok     すべての管に継手があるか（0 が混ざっていれば false）
+   */
+  function normalBendCuts(offsets, faces, insert) {
+    if (!Array.isArray(offsets) || !Array.isArray(faces)) {
+      throw new Error('交点の位置と面間寸法を配列で渡してください');
+    }
+    if (offsets.length !== faces.length) {
+      throw new Error('交点の位置と面間寸法の数が合っていません');
+    }
+    if (!offsets.length) throw new Error('管を1本以上渡してください');
+
+    var ins = (insert === undefined || insert === null) ? 0 : insert;
+    if (!isFinite(ins) || ins < 0) throw new Error('差し込み深さは0以上の数値で入力してください');
+    if (!faces.every(function (v) { return isFinite(v) && v >= 0; })) {
+      throw new Error('面間寸法は0以上の数値で入力してください');
+    }
+
+    var raw = offsets.map(function (x, i) { return x - faces[i] + ins; });
+    var base = raw[0];
+    var cuts = raw.map(function (v) { return v - base; });
+    var shifts = [];
+    for (var i = 1; i < cuts.length; i++) shifts.push(cuts[i] - cuts[i - 1]);
+
+    return {
+      cuts: cuts,
+      shifts: shifts,
+      backs: faces.map(function (v) { return v > 0 ? v - ins : 0; }),
+      total: cuts[cuts.length - 1],
+      insert: ins,
+      ok: faces.every(function (v) { return v > 0; })
+    };
+  }
+
   /* ------------------------------------------ 管の接続点（カップリング）
    * 支持点との関係は材質で規定が違います（公共建築工事標準仕様書 電気設備工事編）。
    *   金属管   : 管相互の接続点は支持の対象に明記なし → サドルと当たらなければよい
@@ -801,6 +853,7 @@
     layoutMixedInWidth: layoutMixedInWidth,
     parallelStagger: parallelStagger,
     parallelStaggerList: parallelStaggerList,
+    normalBendCuts: normalBendCuts,
     offset: offset,
     bendMarks: bendMarks,
     minBendRadius: minBendRadius,

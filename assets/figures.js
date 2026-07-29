@@ -108,6 +108,10 @@
     var ods = Array.isArray(o.ods) ? o.ods : null;
     // 曲げ半径（芯・mm）。ノーマルベンドのように半径のある曲げを描くときに使う
     var radii = Array.isArray(o.radii) ? o.radii : null;
+    // 面間寸法（交点から継手の端まで・mm）。渡すと継手の範囲と切断位置を描く
+    var faces = radii && Array.isArray(o.faces) ? o.faces : null;
+    // 交点から管の切断位置まで戻る距離。差し込み深さのぶん、面より内側になる
+    var backs = faces && Array.isArray(o.cutBacks) ? o.cutBacks : faces;
     var count = offsets ? offsets.length : 0;
     if (count < 2 || !pitches || pitches.length !== count - 1) return '';
     if (!pitches.every(function (v) { return v > 0; })) return '';
@@ -127,9 +131,12 @@
       ? radii.map(function (R) { return R > 0 ? R * Math.tan(t / 2) : 0; })
       : null;
     var maxTan = tangents ? Math.max.apply(null, tangents) : 0;
+    // 継手は接点より外側まで伸びるので、直線部はそこまで見込んでおく
+    var maxFace = faces ? Math.max.apply(null, faces) : 0;
+    var reach = Math.max(maxTan, maxFace);
 
-    var leadIn = Math.max(maxPitch * 1.4, maxShift * 1.2, maxTan * 1.6, 40);
-    var leadOut = Math.max(Math.max(maxPitch, maxAfter) * 1.6, maxTan * 1.6, 60);
+    var leadIn = Math.max(maxPitch * 1.4, maxShift * 1.2, reach * 1.6, 40);
+    var leadOut = Math.max(Math.max(maxPitch, maxAfter) * 1.6, reach * 1.6, 60);
 
     // モデル座標（mm・y は下向き）で各管の 始点／曲げ位置／終点 を出す。
     // ずらし量は負にもなるので、いちばん手前の曲げ位置から直線部を取る。
@@ -203,6 +210,17 @@
         ' L ' + xy(p.end);
     }
 
+    /** 継手が据わる範囲だけの道すじ。管の道すじの、面から面までを切り出したもの */
+    function fittingPath(p, i, f1, f2) {
+      var xy = function (q) { return X(q[0]).toFixed(1) + ' ' + Y(q[1]).toFixed(1); };
+      var T = tangents[i], rr = (radii[i] * s).toFixed(1);
+      var t1 = [p.vertex[0] - T, p.vertex[1]];
+      var t2 = [p.vertex[0] + T * cos, p.vertex[1] - T * sin];
+      return 'M ' + xy(f1) + ' L ' + xy(t1) +
+        ' A ' + rr + ' ' + rr + ' 0 0 0 ' + xy(t2) +
+        ' L ' + xy(f2);
+    }
+
     pipes.forEach(function (p, i) {
       var d = pipePath(p, i);
 
@@ -214,6 +232,29 @@
           '" d="' + d + '"/>');
         o.push('<path class="pipe-bore" fill="none" style="stroke-width:' +
           Math.max(w - 3, 1).toFixed(1) + '" d="' + d + '"/>');
+      }
+
+      // 継手が据わる範囲（面から面まで）を濃く重ね、その両端が管の切断位置になる
+      var L = faces ? faces[i] : 0;
+      if (L > 0) {
+        var f1 = [p.vertex[0] - L, p.vertex[1]];
+        var f2 = [p.vertex[0] + L * cos, p.vertex[1] - L * sin];
+        o.push('<path class="fitting" fill="none" style="stroke-width:' +
+          Math.max(w, 3).toFixed(1) + '" d="' + fittingPath(p, i, f1, f2) + '"/>');
+
+        // 切断位置の印。管の向きと直角に、管の太さより少し長く引く。
+        // 差し込むぶんは管が継手の中まで入るので、印は面より内側になる
+        var B = backs[i] > 0 ? backs[i] : L;
+        var c1 = [p.vertex[0] - B, p.vertex[1]];
+        var c2 = [p.vertex[0] + B * cos, p.vertex[1] - B * sin];
+        var tick = Math.max(w / 2 + 5, 8);
+        [[c1, [1, 0]], [c2, [cos, -sin]]].forEach(function (q) {
+          var c = q[0], u = q[1];           // u は管の進む向き（画面の x,y）
+          o.push('<line class="cut" x1="' + (X(c[0]) - u[1] * tick).toFixed(1) +
+            '" y1="' + (Y(c[1]) + u[0] * tick).toFixed(1) +
+            '" x2="' + (X(c[0]) + u[1] * tick).toFixed(1) +
+            '" y2="' + (Y(c[1]) - u[0] * tick).toFixed(1) + '"/>');
+        });
       }
 
       o.push('<path class="' + (w >= 5 ? 'pipe-center' : 'pipe-line') +
