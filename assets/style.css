@@ -281,6 +281,13 @@ select { appearance: none; background-image: none; }
 .big .value { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .big .unit-t { font-size: .9rem; color: var(--fg-dim); }
 
+/* 何のまとまりかを示す小見出し（数値カードの上） */
+.kv-head {
+  margin: 14px 0 6px;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
 .kv { display: flex; flex-wrap: wrap; gap: 8px; }
 .kv > div {
   flex: 1 1 130px;
