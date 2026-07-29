@@ -106,6 +106,8 @@
     var pitches = o.pitches, offsets = o.offsets, angleDeg = o.angle;
     var after = o.pitchesAfter || pitches;
     var ods = Array.isArray(o.ods) ? o.ods : null;
+    // 曲げ半径（芯・mm）。ノーマルベンドのように半径のある曲げを描くときに使う
+    var radii = Array.isArray(o.radii) ? o.radii : null;
     var count = offsets ? offsets.length : 0;
     if (count < 2 || !pitches || pitches.length !== count - 1) return '';
     if (!pitches.every(function (v) { return v > 0; })) return '';
@@ -116,8 +118,15 @@
     var maxPitch = Math.max.apply(null, pitches);
     var maxAfter = Math.max.apply(null, after);
     var maxShift = Math.max.apply(null, offsets.map(Math.abs));
-    var leadIn = Math.max(maxPitch * 1.4, maxShift * 1.2, 40); // 曲げ手前の直線部
-    var leadOut = Math.max(Math.max(maxPitch, maxAfter) * 1.6, 60); // 曲げた先の直線部
+
+    // 交点から接点（曲げ始め）までの距離。直線部はこれより長く取る必要がある
+    var tangents = radii
+      ? radii.map(function (R) { return R > 0 ? R * Math.tan(t / 2) : 0; })
+      : null;
+    var maxTan = tangents ? Math.max.apply(null, tangents) : 0;
+
+    var leadIn = Math.max(maxPitch * 1.4, maxShift * 1.2, maxTan * 1.6, 40);
+    var leadOut = Math.max(Math.max(maxPitch, maxAfter) * 1.6, maxTan * 1.6, 60);
 
     // モデル座標（mm・y は下向き）で各管の 始点／曲げ位置／終点 を出す。
     // ずらし量は負にもなるので、いちばん手前の曲げ位置から直線部を取る。
@@ -176,23 +185,36 @@
     var showAll = step >= 20;
     var showEnds = (rowY[count - 1] - rowY[0]) * s >= 20;
 
+    /** 管1本の道すじ。曲げ半径があれば、直線 → 円弧 → 直線でつなぐ */
+    function pipePath(p, i) {
+      var xy = function (q) { return X(q[0]).toFixed(1) + ' ' + Y(q[1]).toFixed(1); };
+      var T = tangents ? tangents[i] : 0;
+      if (!(T > 0)) {
+        return 'M ' + xy(p.start) + ' L ' + xy(p.vertex) + ' L ' + xy(p.end);
+      }
+      var rr = (radii[i] * s).toFixed(1);
+      var t1 = [p.vertex[0] - T, p.vertex[1]];
+      var t2 = [p.vertex[0] + T * cos, p.vertex[1] - T * sin];
+      return 'M ' + xy(p.start) + ' L ' + xy(t1) +
+        ' A ' + rr + ' ' + rr + ' 0 0 0 ' + xy(t2) +
+        ' L ' + xy(p.end);
+    }
+
     pipes.forEach(function (p, i) {
-      var pts = [p.start, p.vertex, p.end].map(function (q) {
-        return X(q[0]).toFixed(1) + ',' + Y(q[1]).toFixed(1);
-      }).join(' ');
+      var d = pipePath(p, i);
 
       // 外径が分かっていれば、管の太さぶんの帯にする。
       // 外周を1枚、内側をもう1枚重ねて、管の壁が見えるようにする。
       var w = ods && ods[i] > 0 ? ods[i] * s : 0;
       if (w >= 5) {
-        o.push('<polyline class="pipe-wall" style="stroke-width:' + w.toFixed(1) +
-          '" points="' + pts + '"/>');
-        o.push('<polyline class="pipe-bore" style="stroke-width:' +
-          Math.max(w - 3, 1).toFixed(1) + '" points="' + pts + '"/>');
+        o.push('<path class="pipe-wall" fill="none" style="stroke-width:' + w.toFixed(1) +
+          '" d="' + d + '"/>');
+        o.push('<path class="pipe-bore" fill="none" style="stroke-width:' +
+          Math.max(w - 3, 1).toFixed(1) + '" d="' + d + '"/>');
       }
 
-      o.push('<polyline class="' + (w >= 5 ? 'pipe-center' : 'pipe-line') +
-        '" points="' + pts + '"/>');
+      o.push('<path class="' + (w >= 5 ? 'pipe-center' : 'pipe-line') +
+        '" fill="none" d="' + d + '"/>');
       o.push('<circle class="vertex" cx="' + X(p.vertex[0]).toFixed(1) +
         '" cy="' + Y(p.vertex[1]).toFixed(1) + '" r="3"/>');
       if (showAll || (showEnds ? (i === 0 || i === count - 1) : i === 0)) {
