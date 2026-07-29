@@ -816,11 +816,18 @@ check('呼びが大きいほど深く差し込む', D.findSeries('E').sizes.ever
 check('受口の深さも呼びとともに大きくなる', D.findSeries('E').sizes.every(function (z, i, a) {
   return i === 0 || FI[z.key].socket > FI[a[i - 1].key].socket;
 }));
-check('差し込み深さは面間寸法より浅い', fiKeys.every(function (k) {
+// 受口は直線部（面間 − 半径）より浅い＝差し込んだ管は曲げ始めまで届かない
+check('受口の深さは直線部より浅い', fiKeys.every(function (k) {
   var nb = D.findNormalBend(k);
-  return !nb || (FI[k].socket < nb.l && FI[k].coupling < nb.l);
+  return !nb || FI[k].socket < nb.l - nb.r;
+}));
+check('カップリングへの差し込みも直線部より浅い', fiKeys.every(function (k) {
+  var nb = D.findNormalBend(k);
+  return !nb || FI[k].coupling < nb.l - nb.r;
 }));
 eq('E25 の受口は 34mm', D.findFittingInsert('E:E25').socket, 34);
+eq('E19 の受口は 30mm（DS0319）', D.findFittingInsert('E:E19').socket, 30);
+eq('E63 の受口は 55mm（DS0363）', D.findFittingInsert('E:E63').socket, 55);
 eq('E25 のカップリングは片側 33mm', D.findFittingInsert('E:E25').coupling, 33);
 eq('E25 のカップリング全長は 66mm', D.findFittingInsert('E:E25').couplingLength, 66);
 eq('E75 の受口は 60mm', D.findFittingInsert('E75').socket, 60);
@@ -909,10 +916,20 @@ eq('E25 の面間は 170mm', D.findNormalBend('E:E25').l, 170);
 eq('G104 の半径は 395mm（最大）', D.findNormalBend('G:G104').r, 395);
 eq('薄鋼 C25 は ねじなし E25 と同じ寸法', D.findNormalBend('C:C25').r,
   D.findNormalBend('E:E25').r);
-check('C19 は製品が無いので引けない', D.findNormalBend('C:C19') === null);
-check('E19 は JIS 規格外（A型のみ）', D.findNormalBend('E:E19').jis === false);
-check('E19 以外は規格外の印が付かない', nbKeys.every(function (k) {
-  return k === 'E:E19' || NB[k].jis !== false;
+check('C19 は製品を確認できていないので引けない', D.findNormalBend('C:C19') === null);
+// 呼び19は製品によって寸法が違う（パナソニック DS0319 の値を採っている）
+eq('E19 の半径は 90mm', D.findNormalBend('E:E19').r, 90);
+eq('E19 の面間は 135mm', D.findNormalBend('E:E19').l, 135);
+check('E19 には製品差の印が付いている', D.findNormalBend('E:E19').varies === true);
+check('E19 以外には製品差の印が付かない', nbKeys.every(function (k) {
+  return k === 'E:E19' || NB[k].varies !== true;
+}));
+// パナソニック DS03xx のカタログ値（呼び / L / R）と突き合わせる
+var DS03 = { E19: [135, 90], E25: [170, 120], E31: [210, 150], E39: [255, 180],
+  E51: [330, 230], E63: [410, 290], E75: [500, 350] };
+check('E管の面間・半径はカタログ値と全サイズ一致', Object.keys(DS03).every(function (n) {
+  var nb = D.findNormalBend('E:' + n);
+  return nb.l === DS03[n][0] && nb.r === DS03[n][1];
 }));
 // PE管は鋼管部が厚鋼と同じなので、厚鋼用の値を代表値として当てている
 eq('PE管は同じ呼びの G管と同じ半径', D.findNormalBend('PE:G28').r,
