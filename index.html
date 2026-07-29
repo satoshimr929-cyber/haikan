@@ -200,6 +200,7 @@
         ノーマルベンドを使うか現場で曲げるかを選ぶと、その曲げ半径で図を描きます
         （どちらでもずらし量は変わりません）。ノーマルベンドなら管の切断位置も出します。
         管どうしが当たる場合は警告と×印を出します（曲げの途中で寄ることがあります）。
+        曲げた先は芯々ピッチでも管と管のあきでも指定できます。
       </p>
 
       <div class="field">
@@ -234,15 +235,24 @@
 
       <div class="field-row">
         <div class="field">
-          <label for="stag-pitch2">曲げた先の芯々ピッチ</label>
-          <div class="unit">
-            <input type="number" id="stag-pitch2" step="1" placeholder="手前と同じ"><span>mm</span>
-          </div>
+          <label for="stag-after-kind">曲げた先の指定</label>
+          <select id="stag-after-kind">
+            <option value="pitch">芯々ピッチ</option>
+            <option value="gap">管と管のあき</option>
+          </select>
         </div>
         <div class="field">
           <label for="stag-angle">曲げ角度</label>
           <div class="unit"><input type="number" id="stag-angle" step="1" value="90"><span>度</span></div>
         </div>
+      </div>
+
+      <div class="field">
+        <label for="stag-pitch2" id="stag-pitch2-label">曲げた先の芯々ピッチ</label>
+        <div class="unit">
+          <input type="number" id="stag-pitch2" step="1" placeholder="手前と同じ"><span>mm</span>
+        </div>
+        <p class="hint" id="stag-pitch2-calc" hidden></p>
       </div>
 
       <div class="field">
