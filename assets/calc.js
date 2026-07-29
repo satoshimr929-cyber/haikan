@@ -652,7 +652,8 @@
    *
    * @param {number[]} offsets 管ごとの交点の位置（parallelStaggerList の offsets）
    * @param {number[]} faces   管ごとの面間寸法 L。継手が無い管は 0 を渡す
-   * @param {number} [insert]  継手への差し込み深さ。既定 0
+   * @param {number|number[]} [insert] 継手への差し込み深さ。既定 0。
+   *   呼びによって変わるので、管ごとの配列でも渡せる
    * @returns {{cuts, shifts, backs, total, insert, ok}}
    *   cuts   1本目の切断位置を 0 とした、管ごとの切断位置
    *   shifts 隣り合う管の切断位置の差（前の管から次の管へのずれ）
@@ -669,13 +670,24 @@
     }
     if (!offsets.length) throw new Error('管を1本以上渡してください');
 
-    var ins = (insert === undefined || insert === null) ? 0 : insert;
-    if (!isFinite(ins) || ins < 0) throw new Error('差し込み深さは0以上の数値で入力してください');
+    var ins;
+    if (Array.isArray(insert)) {
+      if (insert.length !== faces.length) {
+        throw new Error('差し込み深さの数が合っていません');
+      }
+      ins = insert.slice();
+    } else {
+      var one = (insert === undefined || insert === null) ? 0 : insert;
+      ins = faces.map(function () { return one; });
+    }
+    if (!ins.every(function (v) { return isFinite(v) && v >= 0; })) {
+      throw new Error('差し込み深さは0以上の数値で入力してください');
+    }
     if (!faces.every(function (v) { return isFinite(v) && v >= 0; })) {
       throw new Error('面間寸法は0以上の数値で入力してください');
     }
 
-    var raw = offsets.map(function (x, i) { return x - faces[i] + ins; });
+    var raw = offsets.map(function (x, i) { return x - faces[i] + ins[i]; });
     var base = raw[0];
     var cuts = raw.map(function (v) { return v - base; });
     var shifts = [];
@@ -684,9 +696,9 @@
     return {
       cuts: cuts,
       shifts: shifts,
-      backs: faces.map(function (v) { return v > 0 ? v - ins : 0; }),
+      backs: faces.map(function (v, i) { return v > 0 ? v - ins[i] : 0; }),
       total: cuts[cuts.length - 1],
-      insert: ins,
+      insert: ins,           // 管ごとの配列。数値で渡した場合も配列で返す
       ok: faces.every(function (v) { return v > 0; })
     };
   }

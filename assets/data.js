@@ -222,6 +222,30 @@
     'G:G104': { r: 395, a: 250, l: 645, tol: 19 }
   };
 
+  /* ねじなし電線管（E管）の継手に、管がどれだけ入るか。パナソニック製の標準値。
+   *   socket        = B形ノーマルベンドの受口の深さ（本体に直接差し込む）
+   *   coupling      = 標準カップリングへの差し込み深さ（管1本あたり）
+   *   couplingLength= カップリングの全長。ほぼ coupling × 2
+   * A形ノーマルベンドは受口が無く、別途カップリングでつなぐので coupling を使う。
+   * ねじなしコネクタ（ボックス接続用）の差し込み深さも coupling とほぼ同じ
+   * （メーカー設計により1〜2mm浅いことがある）。
+   *
+   * 薄鋼・厚鋼・ポリエチライニングはねじ込み接続なので、この表は持っていない。
+   *
+   * 注意：呼び19の B形は、JIS C 8330 表1 のノーマルベンドの呼び（E25〜E75）に
+   * 含まれていない。上の NORMAL_BEND でも E19 は jis:false（A形のみ）としている。
+   * 受口深さ 23mm はメーカー資料としてそのまま持つが、E19 で B形を選ぶときは
+   * 製品の有無をカタログで確かめること。 */
+  var FITTING_INSERT = {
+    'E:E19': { socket: 23, coupling: 28.5, couplingLength: 57 },
+    'E:E25': { socket: 34, coupling: 33.0, couplingLength: 66 },
+    'E:E31': { socket: 39, coupling: 38.0, couplingLength: 76 },
+    'E:E39': { socket: 44, coupling: 43.0, couplingLength: 86 },
+    'E:E51': { socket: 49, coupling: 47.5, couplingLength: 95 },
+    'E:E63': { socket: 54, coupling: 52.5, couplingLength: 105 },
+    'E:E75': { socket: 60, coupling: 57.0, couplingLength: 114 }
+  };
+
   /* ポリエチライニング電線管は鋼管部が厚鋼電線管と同じなので、厚鋼用の値を当てる。
    * ライニング用の専用品の寸法は未確認なので、代表値として印を付けておく。 */
   (function fillLinedBend() {
@@ -309,13 +333,25 @@
     return NORMAL_BEND[size.key] || null;
   }
 
+  /**
+   * その呼びの継手への差し込み寸法を引く。ねじ込み接続の管には無いので null。
+   * @returns {{socket, coupling, couplingLength}|null}
+   */
+  function findFittingInsert(name) {
+    var size = findSize(name);
+    if (!size) return null;
+    return FITTING_INSERT[size.key] || null;
+  }
+
   var api = {
     PIPE_SERIES: PIPE_SERIES,
     NORMAL_BEND: NORMAL_BEND,
+    FITTING_INSERT: FITTING_INSERT,
     allSizes: allSizes,
     findSize: findSize,
     findSeries: findSeries,
-    findNormalBend: findNormalBend
+    findNormalBend: findNormalBend,
+    findFittingInsert: findFittingInsert
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

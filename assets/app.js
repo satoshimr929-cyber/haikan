@@ -457,6 +457,10 @@
         var nb = p.size ? D.findNormalBend(p.size.key) : null;
         return nb ? nb.l : 0;
       }),
+      // 継手への差し込み寸法。呼びごとに違うので管ごとに持っていく
+      inserts: pipes.map(function (p) {
+        return p.size ? D.findFittingInsert(p.size.key) : null;
+      }),
       // 現場曲げ（ベンダー）の最小曲げ半径（芯）。外径だけの入力では出せない
       fieldRadii: pipes.map(function (p) {
         return p.size ? C.minBendRadius(p.size.id, p.size.od).center : 0;
@@ -504,7 +508,8 @@
     imported: $('#stag-imported'), note: $('#stag-note'),
     result: $('#stag-result'), figure: $('#stag-figure'),
     marks: $('#stag-marks'), quick: $('#stag-quick'), bend: $('#stag-bend'),
-    insert: $('#stag-insert'), insertField: $('#stag-insert-field')
+    insert: $('#stag-insert'), insertField: $('#stag-insert-field'),
+    insertKind: $('#stag-insert-kind'), insertManual: $('#stag-insert-manual')
   };
 
   // サイズ混在から持ち込んだ並び（{labels:[], pitches:[]}）。無ければ null
@@ -524,6 +529,7 @@
     var ods = null;
     var normalR = null;   // ノーマルベンド（既製継手）の芯の曲げ半径。無い呼びは 0
     var normalL = null;   // 同じく面間寸法（交点から継手の端まで）。無い呼びは 0
+    var fitIns = null;    // 継手への差し込み寸法（{socket, coupling}）。無ければ null
     var fieldR = null;    // 現場曲げ（ベンダー）の最小曲げ半径（芯）。内径不明なら 0
     var bend = null, bendLabel = '', bendMaterial = '';  // 一定ピッチのときの管の情報
 
@@ -533,6 +539,7 @@
       ods = staggerImport.ods || null;
       normalR = staggerImport.radii || null;
       normalL = staggerImport.faces || null;
+      fitIns = staggerImport.inserts || null;
       fieldR = staggerImport.fieldRadii || null;
       // 1本でも樹脂管が混ざっていれば、条文未確認である旨を添える
       if ((staggerImport.materials || []).indexOf('樹脂') >= 0) bendMaterial = '樹脂';
@@ -557,12 +564,14 @@
         bend = nb;
         bendLabel = sp.label;
         bendMaterial = sp.size ? sp.size.material : '';
-        ods = []; normalR = []; normalL = []; fieldR = [];
+        var fi = sp.size ? D.findFittingInsert(sp.size.key) : null;
+        ods = []; normalR = []; normalL = []; fieldR = []; fitIns = [];
         for (var j = 0; j < count; j++) {
           ods.push(sp.od);
           normalR.push(nb ? nb.r : 0);
           normalL.push(nb ? nb.l : 0);
           fieldR.push(fr);
+          fitIns.push(fi);
         }
       }
     }
@@ -672,14 +681,25 @@
     // ノーマルベンドを使うなら、管は交点まで届かない。継手の端が来る位置で切る。
     // サイズが混ざると管ごとに面間寸法が変わるので、切断位置のずれは
     // 曲げ位置（交点）のずれとは一致しない。そこを表と図で見えるようにする。
-    var cut = null;
+    var cut = null, insKind = stag.insertKind.value, insMissing = false;
     if (faces && faces.some(function (v) { return v > 0; })) {
-      var insert = parseFloat(stag.insert.value);
-      if (!(insert >= 0)) insert = 0;
+      // 差し込み寸法は呼びごとに違うので、管ごとに引く。
+      // ねじ込み接続の管（薄鋼・厚鋼・ライニング）には表が無いので手入力になる。
+      var manual = parseFloat(stag.insert.value);
+      if (!(manual >= 0)) manual = 0;
+      var inserts = faces.map(function (v, i) {
+        if (v <= 0) return 0;
+        if (insKind === 'none') return 0;
+        if (insKind === 'manual') return manual;
+        var fi = fitIns ? fitIns[i] : null;
+        if (!fi) { insMissing = true; return 0; }
+        return insKind === 'socket' ? fi.socket : fi.coupling;
+      });
       try {
-        cut = C.normalBendCuts(r.offsets, faces, insert);
+        cut = C.normalBendCuts(r.offsets, faces, inserts);
       } catch (e) { cut = null; }
     }
+    stag.insertManual.hidden = insKind !== 'manual';
 
     if (cut) {
       var backs = cut.backs.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
@@ -773,12 +793,22 @@
       var uniqB = cut.backs.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
       note += ' 管は交点まで届かないので、交点から手前へ ' + uniqB.map(fmt).join(' / ') +
         'mm 戻った位置で切ります（図の赤い線）。';
-      if (cut.insert > 0) {
-        note += ' 継手の面間寸法から、差し込み深さ ' + fmt(cut.insert) + 'mm を引いた値です。';
-      } else {
-        note += ' これは継手の面間寸法そのもので、差し込む・ねじ込む深さは含んでいません' +
-          '（JIS に規定がなく製品で違うため）。差し込むぶんを見込むなら' +
-          '「継手への差し込み深さ」に入れてください。';
+      var uniqIns = cut.insert.filter(function (v, i, a) {
+        return faces[i] > 0 && v > 0 && a.indexOf(v) === i;
+      });
+      if (uniqIns.length) {
+        note += ' 継手の面間寸法から、差し込み深さ ' + uniqIns.map(fmt).join(' / ') +
+          'mm を引いた値です' +
+          (insKind === 'socket' ? '（B形ノーマルベンドの受口の深さ）。'
+            : insKind === 'coupling' ? '（A形＋ねじなしカップリング。管1本あたり）。'
+              : '。');
+      } else if (insKind === 'none') {
+        note += ' これは継手の面間寸法そのもので、差し込むぶんは見込んでいません。';
+      }
+      if (insMissing) {
+        note += ' ねじ込み接続の管は差し込み寸法の表を持っていないので、' +
+          'その管は面間寸法のまま出しています。実測して「手入力」に入れてください。';
+        noteKind = noteKind || 'warn';
       }
       if (cut.backs.some(function (v, i) { return faces[i] > 0 && v <= 0; })) {
         note += ' 差し込み深さが面間寸法以上になっています。値を見直してください。';
@@ -825,6 +855,9 @@
   };
   // 管を選び直したときだけ上限間隔と定尺を入れ替える（手で直した値を毎回上書きしないため）
   var supLastSeries = null;
+  // カップリング長さは呼びごとに違うので、シリーズではなくサイズで見張る
+  var supLastSize = null;
+  var SUP_COUPLING_DEFAULT = 60;   // 寸法表を持っていない管に使う目安
 
   var SUP_KIND = { even: '等間隔', joint: '接続点の両側', fill: '間を埋める' };
 
@@ -846,6 +879,16 @@
       supLastSeries = series.id;
     } else if (!series) {
       supLastSeries = null;
+    }
+
+    // 呼びを変えたら、その呼びのカップリング全長を入れ替える。
+    // 表が無い管（ねじ込み接続）まで前の呼びの値を引きずると紛らわしいので、
+    // その場合は目安の既定値に戻す。
+    var sizeKey = p && p.size ? p.size.key : null;
+    if (sizeKey !== supLastSize) {
+      var fit = sizeKey ? D.findFittingInsert(sizeKey) : null;
+      sup.coupling.value = fit ? fit.couplingLength : SUP_COUPLING_DEFAULT;
+      supLastSize = sizeKey;
     }
 
     var length = parseFloat(sup.length.value);
@@ -1336,6 +1379,7 @@
     // 復元した管を「いま選ばれているもの」として覚えさせ、値を上書きさせない
     var p = readPipe(sup.pipe, sup.pipeOd);
     supLastSeries = p && p.size ? p.size.series : null;
+    supLastSize = p && p.size ? p.size.key : null;
   }
 
   function resetInputs() {
@@ -1422,7 +1466,7 @@
       even.gap, even.count, even.pitch], renderEven);
     bind([mixed.mode, mixed.gap, mixed.width, mixed.margin], renderMixed);
     bind([stag.pipe, stag.pipeOd, stag.pitch, stag.pitch2, stag.angle, stag.count,
-      stag.source, stag.bend, stag.insert], renderStagger);
+      stag.source, stag.bend, stag.insert, stag.insertKind], renderStagger);
     bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin,
       sup.stock, sup.first, sup.extra, sup.coupling, sup.saddle,
       sup.atJoint, sup.jointOffset, sup.jointMode], renderSupport);
@@ -1441,6 +1485,7 @@
         ods: mixedLatest.ods.slice(),
         radii: mixedLatest.radii.slice(),
         faces: mixedLatest.faces.slice(),
+        inserts: mixedLatest.inserts.slice(),
         fieldRadii: mixedLatest.fieldRadii.slice(),
         materials: mixedLatest.materials.slice(),
         pitches: mixedLatest.pitches.slice()
