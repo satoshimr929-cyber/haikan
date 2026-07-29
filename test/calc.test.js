@@ -802,6 +802,24 @@ throws('角度が範囲外なら例外', function () {
   C.bendClearance({ offsets: [0, 75], pitches: [75], angle: 180, ods: [25.4, 25.4] });
 });
 
+console.log('\n管と継手のつなぎ方');
+var CONN = { E: 'ねじなし', C: 'ねじ込み', G: 'ねじ込み', PF: 'コネクタ',
+  CD: 'コネクタ', VE: '差込接着', PE: 'ねじ込み' };
+check('全シリーズにつなぎ方がある', D.PIPE_SERIES.every(function (s) {
+  return s.connection === CONN[s.id];
+}));
+check('サイズにも転記されている', D.allSizes().every(function (z) {
+  return z.connection === CONN[z.series];
+}));
+is('E管はねじなし', D.findSize('E25').connection, 'ねじなし');
+is('C管はねじ込み', D.findSize('C:C25').connection, 'ねじ込み');
+is('G管はねじ込み', D.findSize('G:G28').connection, 'ねじ込み');
+is('PE管もねじ込み', D.findSize('PE:G28').connection, 'ねじ込み');
+// B形・A形の区別はねじなし管だけのものなので、差し込み表とつなぎ方は一致するはず
+check('差し込み寸法を持つのはねじなし管だけ', D.allSizes().every(function (z) {
+  return (D.findFittingInsert(z.key) !== null) === (z.connection === 'ねじなし');
+}));
+
 console.log('\n継手への差し込み寸法（ねじなし電線管）');
 var FI = D.FITTING_INSERT;
 var fiKeys = Object.keys(FI);

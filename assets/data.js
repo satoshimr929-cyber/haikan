@@ -15,6 +15,11 @@
  *     合成樹脂管は対象なので true（PF/CD管は「接続点の両側」）。
  *   stockLength    = 定尺。鋼製電線管 3660 / 硬質ビニル電線管 4000。
  *     PF管・CD管はコイル巻きで定尺がないため null。
+ *   connection     = 管と継手のつなぎ方。
+ *     'ねじなし'（E管・止めねじで締める）/ 'ねじ込み'（C管・G管・PE管）/
+ *     'コネクタ'（PF管・CD管）/ '差込接着'（VE管）。
+ *     B形・A形ノーマルベンドの区別はねじなし管だけの話なので、
+ *     この値で画面の選択肢を絞ります。
  *
  * ノーマルベンド（90°の既製継手）の寸法は JIS C 8330:1999 付図1・付図2。
  * 下の NORMAL_BEND を参照。
@@ -31,6 +36,7 @@
       maxSupportSpan: 2000,
       name: 'ねじなし電線管',
       short: 'E管',
+      connection: 'ねじなし',
       std: 'JIS C 8305',
       note: '呼び径は外径に近い値。カップリング部は外径より太くなるため、芯々を詰める場合は継手外径で確認してください。',
       sizes: [
@@ -51,6 +57,7 @@
       maxSupportSpan: 2000,
       name: '薄鋼電線管',
       short: 'C管',
+      connection: 'ねじ込み',
       std: 'JIS C 8305',
       note: '呼び径は外径に近い値。両端にねじが切られるねじ込み管です。',
       sizes: [
@@ -71,6 +78,7 @@
       maxSupportSpan: 2000,
       name: '厚鋼電線管',
       short: 'G管',
+      connection: 'ねじ込み',
       std: 'JIS C 8305',
       note: '呼び径は内径に近い値。同じ呼びでも薄鋼・ねじなしとは外径が異なるので注意。',
       sizes: [
@@ -94,6 +102,7 @@
       maxSupportSpan: 1500,
       name: '合成樹脂製可とう電線管（PF管）',
       short: 'PF管',
+      connection: 'コネクタ',
       std: 'JIS C 8411',
       note: '外径は代表値です。単層・複層やメーカーによって数 mm 変わるため、狭い場所ではカタログ値で確認してください。',
       approx: true,
@@ -114,6 +123,7 @@
       maxSupportSpan: 1500,
       name: '合成樹脂製可とう電線管（CD管）',
       short: 'CD管',
+      connection: 'コネクタ',
       std: 'JIS C 8411',
       note: 'コンクリート埋設専用（オレンジ）。外径は代表値です。',
       approx: true,
@@ -134,6 +144,7 @@
       maxSupportSpan: 1500,
       name: '硬質ビニル電線管',
       short: 'VE管',
+      connection: '差込接着',
       std: 'JIS C 8430',
       note: '呼び径はおおむね内径ですが、VE16 のみ内径 18mm です（規格上の呼びと実寸がずれる唯一のサイズ）。',
       sizes: [
@@ -157,6 +168,7 @@
       maxSupportSpan: 2000,
       name: 'ポリエチライニング電線管（ねじ付き）',
       short: 'PE管',
+      connection: 'ねじ込み',
       std: 'JIS C 8380 G形',
       note: '鋼管部は厚鋼電線管（JIS C 8305・G管）と同寸で、その内外面にポリエチレンを被覆したもの。' +
         '呼びも厚鋼電線管と同じ G16〜G104 です。地中埋設や塩害・薬品のある場所に使います。' +
@@ -292,6 +304,7 @@
           seriesName: s.name,
           seriesShort: s.short,
           std: s.std,
+          connection: s.connection,
           approx: !!s.approx,
           material: s.material,
           maxSupportSpan: s.maxSupportSpan,
