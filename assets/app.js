@@ -36,6 +36,45 @@
     return '<div class="msg ' + (kind || '') + '">' + esc(text) + '</div>';
   }
 
+  /**
+   * 要点だけ出して、補足は畳んでおく注記。
+   * @param {string} text 常に見える1文
+   * @param {string[]} details 「くわしく」を開いたときに出る箇条書き
+   */
+  function more(text, details, key) {
+    return '<div class="msg"><p>' + esc(text) + '</p>' + moreBody(details, key) + '</div>';
+  }
+
+  /**
+   * 「くわしく」の中身だけ。注記の要素に直接入れるときに使う。
+   * @param {string} key 描き直しても開いたままにするための目印
+   */
+  function moreBody(details, key) {
+    if (!details || !details.length) return '';
+    return '<details class="more" data-more="' + esc(key || '') +
+      '"><summary>くわしく</summary><ul>' +
+      details.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') +
+      '</ul></details>';
+  }
+
+  /* 結果の注記は入力のたびに作り直すので、開いていた「くわしく」は覚えておいて
+   * 開き直す。そうしないと、値を1つ直すだけで閉じてしまう。
+   * toggle は bubble しないので、捕捉フェーズで拾う。 */
+  var openMore = {};
+
+  document.addEventListener('toggle', function (e) {
+    var d = e.target;
+    if (!d || d.tagName !== 'DETAILS' || !d.dataset || !d.dataset.more) return;
+    if (d.open) openMore[d.dataset.more] = 1;
+    else delete openMore[d.dataset.more];
+  }, true);
+
+  function restoreMore(el) {
+    $$('details[data-more]', el).forEach(function (d) {
+      if (openMore[d.dataset.more]) d.open = true;
+    });
+  }
+
   /* --------------------------------------------------- 管セレクトの生成 */
 
   var DIRECT = '__direct__';
@@ -116,11 +155,9 @@
     var html = big(byGap ? '芯々距離' : '管と管のあき',
       fmt(byGap ? pitch : gap), 'mm');
 
+    // 大きく出したほう（芯々かあき）と外径は繰り返さない。外径は選択欄に出ている
     html += kv([
-      [a.label + ' 外径', fmt(a.od) + ' mm'],
-      [b.label + ' 外径', fmt(b.od) + ' mm'],
-      ['芯々距離', fmt(pitch) + ' mm'],
-      ['管と管のあき', fmt(gap) + ' mm'],
+      [byGap ? '管と管のあき' : '芯々距離', fmt(byGap ? gap : pitch) + ' mm'],
       ['外面〜外面', fmt(pitch + (a.od + b.od) / 2) + ' mm']
     ]);
 
@@ -212,12 +249,15 @@
 
         if (mode !== 'max') html += big('ピッチ', fmt(layout.pitch), 'mm');
 
+        // 大きく出した値（本数かピッチ）と、入力欄に出ている端あき・有効幅は繰り返さない
         html += kv([
-          ['本数', layout.count + ' 本'],
-          ['ピッチ（芯々）', layout.pitch === null ? '—' : fmt(layout.pitch) + ' mm'],
+          [mode === 'max' ? 'ピッチ（芯々）' : '本数',
+            mode === 'max'
+              ? (layout.pitch === null ? '—' : fmt(layout.pitch) + ' mm')
+              : layout.count + ' 本'],
           ['管と管のあき', layout.gap === null ? '—' : fmt(layout.gap) + ' mm'],
-          ['端あき（片側）', fmt(margin) + ' mm'],
-          ['有効幅', fmt(width) + ' mm']
+          ['端の管の外面から外面まで',
+            fmt((layout.count - 1) * (layout.pitch || 0) + p.od) + ' mm']
         ]);
 
         if (!layout.fits) html += msg('この条件では収まりません。幅・本数・端あきを見直してください。', 'bad');
@@ -417,13 +457,13 @@
     var html = byWidth
       ? big('管と管のあき', fmt(gap), 'mm')
       : big('必要な総幅', fmt(out.totalWidth), 'mm');
+    // 大きく出したほう（総幅かあき）と、入力欄に出ている端あきは繰り返さない
     html += kv([
       ['本数', pipes.length + ' 本'],
-      ['総幅', fmt(out.totalWidth) + ' mm'],
-      [byEach ? '最小のあき' : '管と管のあき',
-        minGap === null ? '—' : fmt(byEach ? minGap : gap) + ' mm'],
-      ['端の管の外面〜外面', fmt(out.span) + ' mm'],
-      ['端あき（片側）', fmt(margin) + ' mm']
+      [byWidth ? '総幅' : (byEach ? '最小のあき' : '管と管のあき'),
+        byWidth ? fmt(out.totalWidth) + ' mm'
+          : (minGap === null ? '—' : fmt(byEach ? minGap : gap) + ' mm')],
+      ['端の管の外面から外面まで', fmt(out.span) + ' mm']
     ]);
     if (incomplete) html += msg('外径が未入力の行は計算から外しています。', 'warn');
 
@@ -500,8 +540,8 @@
         (i === 0 ? '—' : fmt(g)) + '</td></tr>';
     }).join('');
     mixed.marks.innerHTML =
-      '<table><thead><tr><th>管</th><th>外径</th><th>左端<br>からの芯</th>' +
-      '<th>前の管<br>から</th><th>あき</th></tr></thead>' +
+      '<table><thead><tr><th>管</th><th>外径<br>(mm)</th><th>左端からの芯<br>(mm)</th>' +
+      '<th>前の管から<br>(mm)</th><th>あき<br>(mm)</th></tr></thead>' +
       '<tbody>' + body + '</tbody></table>';
   }
 
@@ -688,6 +728,7 @@
         : '管と管のあきでは ' + uniqGap.map(fmt).join(' / ') + ' mm';
     }
 
+    // 曲げ角度と本数は入力欄に出ているので、ここでは繰り返さない
     html += kv([
       ['手前のピッチ', uniform && !useMixed ? fmt(pitches[0]) + ' mm'
         : pitches.map(fmt).join(' / ') + ' mm'],
@@ -695,9 +736,7 @@
         : uniqAfter.map(fmt).join(' / ') + ' mm' +
           (r.pairs.length > 1 && uniqAfter.length === 1 ? '（全ペア）' : '')],
       ['曲げた先のあき', canGap ? uniqGap.map(fmt).join(' / ') + ' mm' : '—'],
-      ['曲げ角度', fmt(angle) + ' °'],
-      ['本数', count2 + ' 本'],
-      ['端から端の合計', fmt(r.total) + ' mm']
+      ['1本目から ' + count2 + '本目まで', fmt(r.total) + ' mm']
     ]);
 
     var minShift = Math.min.apply(null, shifts);
@@ -731,7 +770,7 @@
     // どの管も同じ半径で曲げるかぎり曲げ位置のずらし量は変わらないので、計算はそのまま。
     var way = stag.bend.value;
     var isRight = Math.abs(angle - 90) < 1e-9;   // ノーマルベンドは90°の継手だけ
-    var radii = null, faces = null, note = '', noteKind = '';
+    var radii = null, faces = null, note = '', noteKind = '', noteMore = [];
     stag.insertField.hidden = way !== 'normal';
 
     if (way === 'normal') {
@@ -745,16 +784,20 @@
         var uniq = radii.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
         note = 'ノーマルベンドの曲げ半径（芯）' + uniq.map(fmt).join(' / ') + 'mm で描いています。';
         // 呼び19だけは JIS 表1 に無く、製品によって寸法が違う
-        note += (normalV || []).some(function (v, i) { return v && faces[i] > 0; })
-          ? '呼び19は JIS C 8330 表1 の呼びに入っておらず、製品によって寸法が違います' +
-            '（パナソニック DS0319 は半径90・面間135、外山 TCNA19（A形）は半径70・面間120）。' +
-            'ここはパナソニックの値で描いているので、使う製品を確かめてください。'
-          : 'JIS C 8330 の規定寸法なので、メーカーによる違いはありません。';
+        if ((normalV || []).some(function (v, i) { return v && faces[i] > 0; })) {
+          note += ' 呼び19は製品によって寸法が違います。';
+          noteMore.push('呼び19は JIS C 8330 表1 の呼びに入っていません。' +
+            'パナソニック DS0319 は半径90・面間135、外山 TCNA19（A形）は半径70・面間120。' +
+            'ここはパナソニックの値で描いているので、使う製品を確かめてください。');
+        } else {
+          noteMore.push('JIS C 8330 の規定寸法なので、メーカーによる違いはありません。');
+        }
         if (bend && bend.approx) {
-          note += ' ポリエチライニング用の専用品の寸法は未確認のため、厚鋼用の値を当てています。';
+          noteMore.push('ポリエチライニング用の専用品の寸法は未確認のため、' +
+            '厚鋼用の値を当てています。');
         }
         if (radii.some(function (v) { return v === 0; })) {
-          note += ' 既製品が無い呼びは尖った角のまま描いています。';
+          noteMore.push('既製品が無い呼びは尖った角のまま描いています。');
         }
       } else if (!useMixed && bendLabel && !bend) {
         note = bendLabel + ' のノーマルベンドは製品を確認できていません' +
@@ -768,14 +811,13 @@
       if (fieldR && fieldR.some(function (v) { return v > 0; })) {
         radii = fieldR;
         var uniqF = radii.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
-        note = '現場曲げの最小曲げ半径（芯）' + uniqF.map(fmt).join(' / ') +
-          'mm で描いています。「曲げの内側の半径は管内径の6倍以上」から、' +
-          '内径×6 ＋ 外径÷2 で出した下限値です';
-        note += bendMaterial === '樹脂'
-          ? '（金属管の内線規程 3110-8 と同じ扱いにしています。合成樹脂管の条文は未確認です）。'
-          : '（内線規程 3110-8）。';
-        note += ' 実際にはこれより大きく曲げることが多いので、' +
-          '墨出しの位置は曲げ加工タブの「取り代」で確かめてください。';
+        note = '現場曲げの最小曲げ半径（芯）' + uniqF.map(fmt).join(' / ') + 'mm で描いています。';
+        noteMore.push('「曲げの内側の半径は管内径の6倍以上」から、内径×6 ＋ 外径÷2 で' +
+          '出した下限値です' + (bendMaterial === '樹脂'
+            ? '（金属管の内線規程 3110-8 と同じ扱い。合成樹脂管の条文は未確認です）。'
+            : '（内線規程 3110-8）。'));
+        noteMore.push('実際にはこれより大きく曲げることが多いので、' +
+          '墨出しの位置は曲げ加工タブの「取り代」で確かめてください。');
       } else if (ods) {
         note = '外径だけの入力では内径が分からないので、最小曲げ半径を出せません。' +
           '一覧から配管を選ぶか、「半径を描かない」にしてください。';
@@ -914,31 +956,36 @@
         return faces[i] > 0 && v > 0 && a.indexOf(v) === i;
       });
       if (uniqIns.length) {
-        note += ' 継手の面間寸法から、差し込み深さ ' + uniqIns.map(fmt).join(' / ') +
+        noteMore.push('継手の面間寸法から、差し込み深さ ' + uniqIns.map(fmt).join(' / ') +
           'mm を引いた値です' +
           (insKind === 'socket' ? '（B形ノーマルベンドの受口の深さ）。'
             : insKind === 'coupling' ? '（A形＋ねじなしカップリング。管1本あたり）。'
-              : '。');
+              : '。'));
       } else if (insKind === 'none') {
-        note += ' これは継手の面間寸法そのもので、差し込むぶんは見込んでいません。';
+        noteMore.push('これは継手の面間寸法そのもので、差し込むぶんは見込んでいません。');
       }
       if (insMissing) {
-        note += ' 受口のある継手が無い管が混ざっています。その管は面間寸法のまま' +
-          '出しているので、ねじ込む分は実測して「手入力」に入れてください。';
+        note += ' 受口のある継手が無い管が混ざっています。';
+        noteMore.push('その管は面間寸法のまま出しているので、' +
+          'ねじ込む分は実測して「手入力」に入れてください。');
         noteKind = noteKind || 'warn';
       } else if (!hasSocket && insKind === 'none' && bendConnection === 'ねじ込み') {
-        note += ' ' + bendLabel + ' はねじ込み接続なので、B形・A形の区別はありません。' +
-          'ねじ込む分を見込むなら「手入力」に入れてください。';
+        noteMore.push(bendLabel + ' はねじ込み接続なので、B形・A形の区別はありません。' +
+          'ねじ込む分を見込むなら「手入力」に入れてください。');
       }
       if (cut.backs.some(function (v, i) { return faces[i] > 0 && v <= 0; })) {
         note += ' 差し込み深さが面間寸法以上になっています。値を見直してください。';
         noteKind = 'warn';
       }
-      if (!cut.ok) note += ' 継手が無い呼びの管は、切断位置を出していません。';
+      if (!cut.ok) noteMore.push('継手が無い呼びの管は、切断位置を出していません。');
     }
 
+    // 補足は畳んでおく。常に見えるのは1〜2文だけ
     stag.note.className = 'msg' + (noteKind ? ' ' + noteKind : '');
-    stag.note.textContent = note;
+    stag.note.innerHTML = note
+      ? '<p>' + esc(note) + '</p>' + moreBody(noteMore, 'stag-note')
+      : '';
+    restoreMore(stag.note);
     stag.note.hidden = !note;
 
     var rows = r.offsets.map(function (x, i) {
@@ -955,10 +1002,10 @@
     }).join('');
     stag.marks.innerHTML =
       '<table><thead><tr><th>本</th>' + (labels ? '<th>管</th>' : '') +
-      '<th>前との<br>ピッチ</th><th>前から<br>ずらす</th>' +
-      '<th>交点<br>1本目から</th>' +
-      (cut ? '<th>交点から<br>戻す</th><th>切断位置<br>前からずらす</th>' +
-        '<th>切断位置<br>1本目から</th>' : '') +
+      '<th>前とのピッチ<br>(mm)</th><th>前からずらす<br>(mm)</th>' +
+      '<th>交点・1本目から<br>(mm)</th>' +
+      (cut ? '<th>交点から戻す<br>(mm)</th><th>切断・前からずらす<br>(mm)</th>' +
+        '<th>切断・1本目から<br>(mm)</th>' : '') +
       '</tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
@@ -1044,20 +1091,23 @@
 
     var maxUsed = r.spans.length ? Math.max.apply(null, r.spans) : 0;
 
+    // 入力の焼き直し（全長・管端からの距離）はすぐ上の欄に出ているので出さない
     var html = big('サドルの数', String(r.count), '個');
-    html += kv([
+    var pairs = [
       ['いちばん広い間隔', fmt(maxUsed) + ' mm'],
-      ['間隔の上限', fmt(maxSpan) + ' mm'],
-      ['接続点', joints.length ? joints.length + ' 箇所' : 'なし'],
-      ['接続点までの最短', r.minJointDistance === null ? '—'
-        : fmt(r.minJointDistance) + ' mm'],
-      ['当たる距離', joints.length ? fmt(r.clear) + ' mm 未満' : '—'],
-      ['端からの距離', fmt(margin) + ' mm'],
-      ['配管の全長', fmt(length) + ' mm']
-    ]);
+      ['間隔の上限', fmt(maxSpan) + ' mm']
+    ];
+    if (joints.length) {
+      pairs.push(['管の接続点', joints.length + ' 箇所']);
+      pairs.push(['サドルから接続点まで（最短）',
+        r.minJointDistance === null ? '—' : fmt(r.minJointDistance) + ' mm']);
+      pairs.push(['これより近いと当たる', fmt(r.clear) + ' mm']);
+    }
+    html += kv(pairs);
 
     if (maxUsed > maxSpan + 1e-9) {
-      html += msg('この条件では上限間隔に収まりません。端からの距離を見直してください。', 'bad');
+      html += msg('この条件では上限間隔に収まりません。管端から支持までの距離を見直してください。',
+        'bad');
     }
 
     if (r.clashes.length) {
@@ -1087,18 +1137,26 @@
           : ''), '');
     }
 
+    // 出典まわりは長いので畳んでおく。ふだん要るのは1行目だけ
     if (series) {
-      html += msg(series.short + 'は' + series.material + '製です。' +
-        '支持点間隔の目安は ' + fmt(series.maxSupportSpan) + 'mm 以下、' +
+      html += more(series.short + 'は' + series.material + '製。支持点間隔の目安は ' +
+        fmt(series.maxSupportSpan) + 'mm 以下、' +
         (series.jointSupport
-          ? '管相互の接続点も支持の対象です（PF管・CD管は接続点の両側）。'
-          : '管相互の接続点は支持の対象として明記されていません（ボックス等との接続点と管端が対象）。') +
-        '（出典：公共建築工事標準仕様書 電気設備工事編。金属管2m以下・合成樹脂管1.5m以下・' +
-        '金属製可とう電線管1m以下、ボックスや管端からは0.3m以内。' +
+          ? '管相互の接続点も支持の対象です。'
+          : '管相互の接続点は支持の対象として明記されていません。'),
+      [
+        series.jointSupport
+          ? 'PF管・CD管は「接続点の両側」に支持を置きます。'
+          : '対象はボックス等との接続点と管端です。',
+        '出典：公共建築工事標準仕様書 電気設備工事編。' +
+          '金属管2m以下・合成樹脂管1.5m以下・金属製可とう電線管1m以下、' +
+          'ボックスや管端からは0.3m以内。',
         '内線規程にも同様の規定がありますが原文は未確認です。' +
-        '現場や施工要領の基準があればそちらを優先してください）', '');
+          '現場や施工要領の基準があればそちらを優先してください。'
+      ], 'sup-source');
     }
     sup.result.innerHTML = html;
+    restoreMore(sup.result);
 
     sup.figure.innerHTML = F.supportSVG({
       length: length, margin: margin, positions: r.positions,
@@ -1126,8 +1184,9 @@
         '</tr>';
     }).join('');
     sup.marks.innerHTML =
-      '<table><thead><tr><th>番</th><th>端から</th><th>前から</th>' +
-      '<th>種別</th><th>接続点<br>まで</th></tr></thead><tbody>' + rows + '</tbody></table>';
+      '<table><thead><tr><th>番</th><th>管端から<br>(mm)</th><th>前のサドルから<br>(mm)</th>' +
+      '<th>種別</th><th>接続点まで<br>(mm)</th></tr></thead><tbody>' +
+      rows + '</tbody></table>';
 
     renderCuts(length, joints, stock);
   }
@@ -1173,7 +1232,7 @@
         '<td>' + fmt(b.waste) + '</td></tr>';
     }).join('');
     html += '<div class="table-wrap"><table><thead><tr><th>定尺</th>' +
-      '<th>切り出し（mm）</th><th>端材（mm）</th></tr></thead>' +
+      '<th>切り出し<br>(mm)</th><th>端材<br>(mm)</th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div>';
 
     sup.cuts.innerHTML = html;
@@ -1198,18 +1257,15 @@
       return;
     }
 
+    // 段差と曲げ角度は入力欄に出ているので繰り返さない
     var html = big('曲げと曲げの間隔', fmt(r.travel), 'mm');
     html += kv([
-      ['段差', fmt(r.rise) + ' mm'],
-      ['曲げ角度', fmt(r.angle) + ' °'],
-      ['倍率（1 ÷ sin角度）', '×' + fmt(r.multiplier)],
       ['縮み代', fmt(r.shrink) + ' mm'],
-      ['走り方向に進む距離', fmt(r.run) + ' mm']
+      ['走り方向に進む距離', fmt(r.run) + ' mm'],
+      ['倍率（1 ÷ sin角度）', '×' + fmt(r.multiplier)]
     ]);
     html += msg('1つ目の墨から ' + fmt(r.travel) + 'mm 先が2つ目の墨です。' +
       'この振りで走りは ' + fmt(r.shrink) + 'mm 縮むので、その分を見込んで拾ってください。', '');
-    html += msg('曲げ半径のない折れ線として計算しています。実際のベンダーでは半径のぶん差が出るので、' +
-      '1本目は現物合わせで確かめてください。', '');
     off.result.innerHTML = html;
 
     off.figure.innerHTML = F.offsetSVG(r, p ? p.od : 0);
@@ -1352,7 +1408,6 @@
         ['1→2（立ち上がり）', fmt(r.spans[0]) + ' mm'],
         ['2→3（上を通る）', fmt(r.spans[1]) + ' mm'],
         ['3→4（立ち下がり）', fmt(r.spans[2]) + ' mm'],
-        ['側面の曲げ角度', fmt(angle) + ' °'],
         ['縮み代', fmt(r.shrink) + ' mm']
       ]);
       rows = r.marks.map(function (m, i) {
@@ -1362,9 +1417,7 @@
     } else {
       html = big('中央から両側の墨まで', fmt(r.markSpacing), 'mm');
       html += kv([
-        ['中央の曲げ角度', fmt(r.centerAngle) + ' °'],
-        ['側面の曲げ角度', fmt(r.sideAngle) + ' °'],
-        ['障害物の高さ', fmt(r.height) + ' mm'],
+        ['中央の曲げ角度（側面の2倍）', fmt(r.centerAngle) + ' °'],
         ['縮み代', fmt(r.shrink) + ' mm']
       ]);
       html += msg('障害物の真上に中央の墨を付け、そこから前後に ' + fmt(r.markSpacing) +
@@ -1375,8 +1428,6 @@
       }).join('');
     }
 
-    html += msg('曲げ半径のない折れ線として計算しています。実際のベンダーでは半径のぶん差が出るので、' +
-      '1本目は現物合わせで確かめてください。', '');
     sd.result.innerHTML = html;
 
     sd.figure.innerHTML = F.saddleSVG(r, four ? 4 : 3, parseFloat(sd.width.value),
@@ -1430,10 +1481,14 @@
     tbl.body.innerHTML = hits ? html : '';
     if (!hits) tbl.body.innerHTML = '<p class="hint">該当するサイズがありません。</p>';
 
-    tbl.notes.innerHTML = shown.map(function (s) {
-      return '<p><strong>' + esc(s.short) + '</strong>（' + esc(s.std) + '）：' +
-        esc(s.note) + '</p>';
-    }).join('');
+    // 管種ごとの注記はどれも長いので、表の下に畳んでおく
+    tbl.notes.innerHTML = shown.length
+      ? '<details class="more"><summary>管種ごとの注記（' + shown.length + '件）</summary>' +
+        shown.map(function (s) {
+          return '<p><strong>' + esc(s.short) + '</strong>（' + esc(s.std) + '）：' +
+            esc(s.note) + '</p>';
+        }).join('') + '</details>'
+      : '';
   }
 
   /* ---------------------------------------------------------- 入力の保存
