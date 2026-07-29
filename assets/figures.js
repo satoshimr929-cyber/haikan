@@ -570,7 +570,7 @@
   }
 
   /** 曲げ半径のある1箇所の曲げを横から見た図 */
-  function takeupSVG(r, od) {
+  function takeupSVG(r, od, shift) {
     if (!r || !(r.radius > 0)) return '';
 
     var t = r.angle * Math.PI / 180;
@@ -582,7 +582,15 @@
     var T2 = [r.tangent * cos, -r.tangent * sin];     // 曲げ終わり
     var O = [-r.tangent, -r.radius];                  // 円弧の中心
 
-    var c = makeCanvas([A, B, V, T1, T2, O], od > 0 ? od / 2 : 0);
+    // 外寸を管の面で測る場合、基準の角は交点から脚に沿って shift だけずれる。
+    // 面のぶんの横ずれ e は shift ÷ tan(θ/2)（曲げの外側が正）。
+    var sh = isFinite(shift) ? shift : 0;
+    var e = sh === 0 ? 0 : sh / Math.tan(t / 2);
+    var Vr = [sh, e];                                 // 基準の角
+    var Ar = [A[0], e];                               // 管端A側の基準面
+    var Br = [B[0] + e * sin, B[1] + e * cos];        // 管端B側の基準面
+
+    var c = makeCanvas([A, B, V, T1, T2, O, Vr, Ar, Br], od > 0 ? od / 2 : 0);
     if (!c) return '';
     var o = [open(c, '曲げの取り代の図')];
 
@@ -596,15 +604,19 @@
     // 曲げなければ角になる線（交点まで）を薄く。管の帯に隠れないよう上に重ねる
     o.push(polyline(c, [T1, V, T2], 'ghost'));
 
+    // 管の面を基準にしているときは、その面が交わる角も薄く出す
+    if (sh !== 0) o.push(polyline(c, [Ar, Vr, Br], 'ghost'));
+
     o.push(vertex(c, T1));
     o.push(vertex(c, T2));
+    if (sh !== 0) o.push(vertex(c, Vr));
 
     // 曲げ半径（中心から曲げ始めへ）
     o.push(slantDim(c, O, T1, 'R' + fmt(r.radius), 1));
-    // 外寸A（交点まで）
-    o.push(dimLine(c.X(A[0]), c.dimY, c.X(V[0]), c.dimY, 'A ' + fmt(r.legA), 'h'));
-    // 外寸B（交点から管端まで）
-    o.push(slantDim(c, V, B, 'B ' + fmt(r.legB), -1));
+    // 外寸A（基準の角まで）。入力した値をそのまま出す
+    o.push(dimLine(c.X(A[0]), c.dimY, c.X(Vr[0]), c.dimY, 'A ' + fmt(r.legA + sh), 'h'));
+    // 外寸B（基準の角から管端まで）
+    o.push(slantDim(c, Vr, Br, 'B ' + fmt(r.legB + sh), -1));
 
     o.push('</svg>');
     return o.join('');

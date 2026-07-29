@@ -1218,19 +1218,40 @@
   var tk = {
     pipe: $('#tk-pipe'), pipeOd: $('#tk-pipe-od'),
     a: $('#tk-a'), b: $('#tk-b'), radius: $('#tk-radius'), angle: $('#tk-angle'),
+    basis: $('#tk-basis'), basisCalc: $('#tk-basis-calc'),
     result: $('#tk-result'), figure: $('#tk-figure')
   };
 
   function renderTakeup() {
     var p = readPipe(tk.pipe, tk.pipeOd);
+    var angle = parseFloat(tk.angle.value);
+    var inA = parseFloat(tk.a.value), inB = parseFloat(tk.b.value);
+
+    // 支持材や壁の面から測ることもあるので、外寸の基準を選べるようにしている。
+    // 計算は芯基準でするので、入力を芯基準へ直してから bendMarks に渡す。
+    var wantBasis = tk.basis.value;
+    var od = p ? p.od : 0;
+    var canBasis = od > 0;
+    var basis = canBasis ? wantBasis : 'center';
+    var shift = 0;
+    try {
+      shift = C.legBasisShift(od, angle, basis);
+    } catch (e) { shift = 0; }
+
     var r;
     try {
-      r = C.bendMarks(parseFloat(tk.a.value), parseFloat(tk.b.value),
-        parseFloat(tk.radius.value), parseFloat(tk.angle.value));
+      r = C.bendMarks(inA - shift, inB - shift,
+        parseFloat(tk.radius.value), angle);
     } catch (e) {
       tk.result.innerHTML = msg(e.message, 'warn');
       tk.figure.innerHTML = '';
       return;
+    }
+
+    tk.basisCalc.hidden = shift === 0;
+    if (shift !== 0) {
+      tk.basisCalc.textContent = '管の芯（交点まで）に直すと A ' + fmt(r.legA) +
+        ' / B ' + fmt(r.legB) + ' mm（面と交点の差は ' + fmt(Math.abs(shift)) + ' mm）';
     }
 
     var html = big('切断長', fmt(r.developed), 'mm');
@@ -1238,12 +1259,23 @@
       ['取り代', fmt(r.takeup) + ' mm'],
       ['曲げ始めの墨（管端Aから）', fmt(r.markStart) + ' mm'],
       ['曲げ終わりの墨', fmt(r.markEnd) + ' mm'],
-      ['交点から曲げ始めまで', fmt(r.tangent) + ' mm'],
+      [(shift === 0 ? '交点' : '基準の角') + 'から曲げ始めまで',
+        fmt(r.tangent + shift) + ' mm'],
       ['曲げている部分の長さ', fmt(r.arc) + ' mm']
     ]);
 
     if (!r.fits) {
       html += msg('外寸が曲げ半径に対して短すぎます。この半径では曲げきれません。', 'bad');
+    }
+    if (shift !== 0) {
+      html += msg('外寸を' + (basis === 'outer' ? '曲げの外側' : '曲げの内側') +
+        'の面で測っています。芯（交点）で測るより ' + fmt(Math.abs(shift)) + 'mm ' +
+        (basis === 'outer' ? '長く' : '短く') + 'なる分を差し引いて計算しました。' +
+        '切断長と墨の位置は、どちらで測っても同じ管になります。', '');
+    }
+    if (wantBasis !== 'center' && !canBasis) {
+      html += msg('管の面で測るには外径が要ります。一覧から配管を選ぶか、' +
+        '外径を直接入力してください。管の芯として計算しています。', 'warn');
     }
 
     // 選んだ管があれば、現場曲げの下限と既製継手の寸法を並べて出す
@@ -1278,7 +1310,7 @@
     }
     tk.result.innerHTML = html;
 
-    tk.figure.innerHTML = F.takeupSVG(r, p ? p.od : 0);
+    tk.figure.innerHTML = F.takeupSVG(r, od, shift);
   }
 
   /* ----------------------------------------------- 曲げ3：障害物よけ */
@@ -1597,7 +1629,7 @@
       sup.stock, sup.first, sup.extra, sup.coupling, sup.saddle,
       sup.atJoint, sup.jointOffset, sup.jointMode], renderSupport);
     bind([off.pipe, off.pipeOd, off.rise, off.angle], renderOffset);
-    bind([tk.pipe, tk.pipeOd, tk.a, tk.b, tk.radius, tk.angle], renderTakeup);
+    bind([tk.pipe, tk.pipeOd, tk.a, tk.b, tk.radius, tk.angle, tk.basis], renderTakeup);
     bind([sd.pipe, sd.pipeOd, sd.kind, sd.height, sd.angle, sd.width, sd.clear],
       renderSaddle);
     bind([tbl.series, tbl.search], renderTable);

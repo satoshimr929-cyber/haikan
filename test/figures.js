@@ -185,7 +185,18 @@ var CASES = [
     // 管の太さを描く
     { 'tk-pipe': 'G:G104', 'tk-a': '500', 'tk-b': '400', 'tk-radius': '400' },
     { 'tk-radius': '120', 'tk-angle': '45' }, { 'tk-pipe': 'E:E19', 'tk-radius': '90' },
-    { 'tk-pipe': '__direct__' }, { 'tk-pipe': 'E:E25', 'tk-radius': '200', 'tk-angle': '90' }
+    { 'tk-pipe': '__direct__' }, { 'tk-pipe': 'E:E25', 'tk-radius': '200', 'tk-angle': '90' },
+    // 外寸をどこで測るか（芯／曲げの外側の面／内側の面）
+    { 'tk-basis': 'outer' }, { 'tk-basis': 'inner' },
+    { 'tk-angle': '45' }, { 'tk-angle': '135' }, { 'tk-angle': '22.5' },
+    { 'tk-basis': 'outer', 'tk-angle': '135' },
+    { 'tk-pipe': 'G:G104', 'tk-angle': '90', 'tk-radius': '700', 'tk-a': '1500',
+      'tk-b': '1200' },                                 // 太い管で大きくずれる
+    { 'tk-basis': 'inner' },
+    { 'tk-a': '60', 'tk-b': '60', 'tk-radius': '100' }, // 外寸がずれ量に近い
+    { 'tk-pipe': '__direct__', 'tk-basis': 'outer' },   // 外径が分からない
+    { 'tk-pipe': 'E:E25', 'tk-basis': 'center', 'tk-a': '500', 'tk-b': '400',
+      'tk-radius': '200', 'tk-angle': '90' }
   ] },
   { tab: 'bend', mode: 'saddle', fig: '#sd-figure', sets: [
     { 'sd-kind': '3', 'sd-height': '50', 'sd-angle': '22.5' },

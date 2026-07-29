@@ -362,6 +362,33 @@
   }
 
   /**
+   * 外寸をどこで測るかの差。
+   *
+   * 現場では支持材や壁の面から寸法を取ることがある。管がその面に接していれば、
+   * 測っている角は「管の外面どうしが交わる角」で、芯どうしの交点より
+   * 各脚に沿って (外径÷2) × tan(角度÷2) だけ外へずれる。
+   * 内側の面を基準にすれば、同じだけ内へずれる。
+   *
+   * 導出：芯線を外へ e ずらした2本の直線の交点は (e·tan(θ/2), e) になる
+   * （脚に沿った成分が e·tan(θ/2)）。
+   *
+   * @param {number} od     管の外径
+   * @param {number} angleDeg 曲げ角度
+   * @param {string} basis  'center'（芯）/ 'outer'（曲げの外側の面）/ 'inner'（内側の面）
+   * @returns {number} 芯基準の外寸に足すべき量。外側は正、内側は負、芯は0
+   */
+  function legBasisShift(od, angleDeg, basis) {
+    if (basis !== 'outer' && basis !== 'inner') return 0;
+    if (!(od > 0)) return 0;
+    req(angleDeg, '曲げ角度');
+    if (angleDeg <= 0 || angleDeg >= 180) {
+      throw new Error('曲げ角度は0〜180°の間で入力してください');
+    }
+    var shift = (od / 2) * Math.tan(angleDeg * DEG / 2);
+    return basis === 'outer' ? shift : -shift;
+  }
+
+  /**
    * 内線規程の「曲げの内側の半径は管内径の6倍以上」から最小曲げ半径を出す。
    * @returns {{inner, center, factor}} inner=内側半径 / center=芯の半径
    */
@@ -1016,6 +1043,7 @@
     offset: offset,
     bendMarks: bendMarks,
     minBendRadius: minBendRadius,
+    legBasisShift: legBasisShift,
     saddle3: saddle3,
     saddle4: saddle4,
     supportLayout: supportLayout,
