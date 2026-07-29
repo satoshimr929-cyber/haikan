@@ -113,6 +113,9 @@
     if (!pitches.every(function (v) { return v > 0; })) return '';
     if (!offsets.every(isFinite)) return '';
 
+    // この図は makeCanvas を通さず自前で座標を作るので、ラベル台帳は自分で空にする
+    resetLabels();
+
     var t = angleDeg * Math.PI / 180;
     var cos = Math.cos(t), sin = Math.sin(t);
     var maxPitch = Math.max.apply(null, pitches);
@@ -218,9 +221,7 @@
       o.push('<circle class="vertex" cx="' + X(p.vertex[0]).toFixed(1) +
         '" cy="' + Y(p.vertex[1]).toFixed(1) + '" r="3"/>');
       if (showAll || (showEnds ? (i === 0 || i === count - 1) : i === 0)) {
-        o.push('<text class="strong" x="' + (X(p.start[0]) - 6).toFixed(1) +
-          '" y="' + (Y(p.start[1]) + 4).toFixed(1) + '" text-anchor="end">' +
-          (i + 1) + '</text>');
+        o.push(tryLabel(X(p.start[0]) - 6, Y(p.start[1]) + 4, i + 1, 'end', 'strong'));
       }
       // 曲げ位置から下の寸法線へ落とす引き出し線
       o.push('<line class="cl" x1="' + X(p.vertex[0]).toFixed(1) +
@@ -239,8 +240,7 @@
     // 角度が大きいと図の外へ出るので、内側に収まる位置まで戻す
     var aLabelX = Math.min(W - PADR - 14, X(v0[0]) + (r + 13) * Math.cos(t / 2));
     var aLabelY = Math.max(LABEL_TOP, Y(v0[1]) - (r + 13) * Math.sin(t / 2) + 4);
-    o.push('<text x="' + aLabelX.toFixed(1) + '" y="' + aLabelY.toFixed(1) +
-      '" text-anchor="middle">' + fmt(angleDeg) + '°</text>');
+    o.push(tryLabel(aLabelX, aLabelY, fmt(angleDeg) + '°'));
 
     // 手前のピッチ。ペアごとに違うことがあるので、すべての区間に入れる
     var px = X(startX) + Math.min(26, leadIn * s * 0.4);
@@ -271,9 +271,7 @@
     });
     if (pitchAfter * s > 34) {
       var mid = [(a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2];
-      o.push('<text x="' + (X(mid[0]) + 11 * cos).toFixed(1) +
-        '" y="' + (Y(mid[1]) - 11 * sin + 4).toFixed(1) +
-        '" text-anchor="middle">' + fmt(pitchAfter) + '</text>');
+      o.push(tryLabel(X(mid[0]) + 11 * cos, Y(mid[1]) - 11 * sin + 4, fmt(pitchAfter)));
     }
 
     // 下側：曲げ位置のずれ

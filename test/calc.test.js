@@ -724,5 +724,55 @@ is('PE管の品番が引ける', D.findSize('PE:G28').code, 'DWL28K');
 eq('小文字でも引ける', D.findSize('e25').od, 25.4);
 check('無いサイズは null', D.findSize('X99') === null);
 
+console.log('\nノーマルベンド（JIS C 8330 の既製継手）');
+var NB = D.NORMAL_BEND;
+var nbKeys = Object.keys(NB);
+check('全サイズで 面間 L = 半径 R + 直線部 a', nbKeys.every(function (k) {
+  return Math.abs(NB[k].l - (NB[k].r + NB[k].a)) < 1e-9;
+}));
+check('半径・直線部・面間はどれも正の数', nbKeys.every(function (k) {
+  return NB[k].r > 0 && NB[k].a > 0 && NB[k].l > 0;
+}));
+check('公差は E19 以外すべて付いている', nbKeys.every(function (k) {
+  return k === 'E:E19' || NB[k].tol > 0;
+}));
+// 呼びが大きいほど半径も大きい（シリーズごとに単調）
+['E', 'C', 'G'].forEach(function (sid) {
+  var rs = D.findSeries(sid).sizes
+    .filter(function (z) { return NB[z.key]; })
+    .map(function (z) { return NB[z.key].r; });
+  check(sid + '管：呼びが大きいほど曲げ半径も大きい', rs.every(function (v, i) {
+    return i === 0 || v > rs[i - 1];
+  }));
+});
+eq('E25 の半径は 120mm（芯）', D.findNormalBend('E:E25').r, 120);
+eq('E25 の面間は 170mm', D.findNormalBend('E:E25').l, 170);
+eq('G104 の半径は 395mm（最大）', D.findNormalBend('G:G104').r, 395);
+eq('薄鋼 C25 は ねじなし E25 と同じ寸法', D.findNormalBend('C:C25').r,
+  D.findNormalBend('E:E25').r);
+check('C19 は製品が無いので引けない', D.findNormalBend('C:C19') === null);
+check('E19 は JIS 規格外（A型のみ）', D.findNormalBend('E:E19').jis === false);
+check('E19 以外は規格外の印が付かない', nbKeys.every(function (k) {
+  return k === 'E:E19' || NB[k].jis !== false;
+}));
+// PE管は鋼管部が厚鋼と同じなので、厚鋼用の値を代表値として当てている
+eq('PE管は同じ呼びの G管と同じ半径', D.findNormalBend('PE:G28').r,
+  D.findNormalBend('G:G28').r);
+check('PE管は代表値である印が付いている', D.findNormalBend('PE:G28').approx === true);
+check('G管には代表値の印が付かない', D.findNormalBend('G:G28').approx !== true);
+check('PF/CD/VE管にはノーマルベンドが無い',
+  ['PF:PF16', 'CD:CD16', 'VE:VE16'].every(function (k) {
+    return D.findNormalBend(k) === null;
+  }));
+check('無いサイズは null', D.findNormalBend('X99') === null);
+// 内線規程の「内径の6倍」は現場曲げの規定で、既製継手には適用されない
+check('JIS の規定半径はどれも内径×6 に達しない', nbKeys.every(function (k) {
+  return NB[k].r < D.findSize(k).id * 6;
+}));
+check('現場曲げの最小半径のほうがノーマルベンドより大きい', nbKeys.every(function (k) {
+  var z = D.findSize(k);
+  return C.minBendRadius(z.id, z.od).center > NB[k].r;
+}));
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

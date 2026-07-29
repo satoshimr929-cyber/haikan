@@ -447,10 +447,17 @@
     mixedLatest = {
       labels: out.items.map(function (it) { return it.label; }),
       ods: out.items.map(function (it) { return it.od; }),
-      // 図でノーマルベンドを描くための最小曲げ半径。内径が分かる管だけ出せる
+      // 図でノーマルベンドを描くための曲げ半径（芯）。既製品がある呼びだけ出せる
       radii: pipes.map(function (p) {
+        var nb = p.size ? D.findNormalBend(p.size.key) : null;
+        return nb ? nb.r : 0;
+      }),
+      // 現場曲げ（ベンダー）の最小曲げ半径（芯）。外径だけの入力では出せない
+      fieldRadii: pipes.map(function (p) {
         return p.size ? C.minBendRadius(p.size.id, p.size.od).center : 0;
       }),
+      // 注記の出典を材質で書き分けるために持っていく
+      materials: pipes.map(function (p) { return p.size ? p.size.material : ''; }),
       pitches: out.pitches.slice()
     };
     mixed.toStagger.disabled = out.pitches.length === 0;
@@ -491,7 +498,7 @@
     source: $('#stag-source'), uniformRow: $('#stag-uniform-row'),
     imported: $('#stag-imported'), note: $('#stag-note'),
     result: $('#stag-result'), figure: $('#stag-figure'),
-    marks: $('#stag-marks'), quick: $('#stag-quick')
+    marks: $('#stag-marks'), quick: $('#stag-quick'), bend: $('#stag-bend')
   };
 
   // サイズ混在から持ち込んだ並び（{labels:[], pitches:[]}）。無ければ null
@@ -508,13 +515,19 @@
     var after = stag.pitch2.value === '' ? undefined : parseFloat(stag.pitch2.value);
     var pitches, labels;
 
-    var ods = null, radii = null;
+    var ods = null;
+    var normalR = null;   // ノーマルベンド（既製継手）の芯の曲げ半径。無い呼びは 0
+    var fieldR = null;    // 現場曲げ（ベンダー）の最小曲げ半径（芯）。内径不明なら 0
+    var bend = null, bendLabel = '', bendMaterial = '';  // 一定ピッチのときの管の情報
 
     if (useMixed) {
       pitches = staggerImport.pitches;
       labels = staggerImport.labels;
       ods = staggerImport.ods || null;
-      radii = staggerImport.radii || null;
+      normalR = staggerImport.radii || null;
+      fieldR = staggerImport.fieldRadii || null;
+      // 1本でも樹脂管が混ざっていれば、条文未確認である旨を添える
+      if ((staggerImport.materials || []).indexOf('樹脂') >= 0) bendMaterial = '樹脂';
       stag.pitch2.placeholder = '手前と同じ（ばらばらのまま）';
       stag.imported.textContent = 'サイズ混在から ' + labels.length + ' 本を取り込みました（' +
         labels.join(' / ') + '）。ピッチは ' + pitches.map(fmt).join(' / ') + ' mm です。';
@@ -530,12 +543,15 @@
       // 図で管の太さを描くために外径を拾う（同じ管が並ぶ前提）
       var sp = readPipe(stag.pipe, stag.pipeOd);
       if (sp) {
-        ods = [];
-        for (var j = 0; j < count; j++) ods.push(sp.od);
-        if (sp.size) {
-          var R = C.minBendRadius(sp.size.id, sp.size.od).center;
-          radii = [];
-          for (var m = 0; m < count; m++) radii.push(R);
+        var nb = sp.size ? D.findNormalBend(sp.size.key) : null;
+        // 外径しか分からない（直接入力）ときは、現場曲げの最小半径は出せない
+        var fr = sp.size ? C.minBendRadius(sp.size.id, sp.size.od).center : 0;
+        bend = nb;
+        bendLabel = sp.label;
+        bendMaterial = sp.size ? sp.size.material : '';
+        ods = []; normalR = []; fieldR = [];
+        for (var j = 0; j < count; j++) {
+          ods.push(sp.od); normalR.push(nb ? nb.r : 0); fieldR.push(fr);
         }
       }
     }
@@ -589,31 +605,71 @@
     }
     stag.result.innerHTML = html;
 
-    // 90°はノーマルベンド（曲げ半径のある継手）を使うのが普通なので、
-    // 尖った角ではなく半径のある曲げとして描く。
-    // 継手の半径が同じなら曲げ位置のずらし量は変わらないので、計算はそのまま。
-    var isNormalBend = Math.abs(angle - 90) < 1e-9 && radii &&
-      radii.some(function (v) { return v > 0; });
+    // 曲げ方（ノーマルベンド／現場曲げ／半径なし）で、図に描く曲げ半径を決める。
+    // どの管も同じ半径で曲げるかぎり曲げ位置のずらし量は変わらないので、計算はそのまま。
+    var way = stag.bend.value;
+    var isRight = Math.abs(angle - 90) < 1e-9;   // ノーマルベンドは90°の継手だけ
+    var radii = null, note = '', noteKind = '';
+
+    if (way === 'normal') {
+      if (!isRight) {
+        note = 'ノーマルベンドは 90° の継手です。' + fmt(angle) +
+          '° は現場での曲げになるので、「現場曲げ」に切り替えると最小曲げ半径で描けます。';
+        noteKind = 'warn';
+      } else if (normalR && normalR.some(function (v) { return v > 0; })) {
+        radii = normalR;
+        var uniq = radii.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
+        note = 'ノーマルベンドの曲げ半径（芯）' + uniq.map(fmt).join(' / ') +
+          'mm で描いています。JIS C 8330 の規定寸法なので、メーカーによる違いはありません。';
+        if (bend && bend.jis === false) {
+          note += ' ただし呼び19は JIS の規定になく、メーカーの A型のみです。';
+        }
+        if (bend && bend.approx) {
+          note += ' ポリエチライニング用の専用品の寸法は未確認のため、厚鋼用の値を当てています。';
+        }
+        if (radii.some(function (v) { return v === 0; })) {
+          note += ' 既製品が無い呼びは尖った角のまま描いています。';
+        }
+      } else if (!useMixed && bendLabel && !bend) {
+        note = bendLabel + ' のノーマルベンドは規格にも製品にもありません。' +
+          '現場でのベンダー曲げになるので、「現場曲げ」に切り替えてください。';
+        noteKind = 'warn';
+      } else if (!ods) {
+        note = '配管を選ぶと、ノーマルベンドの曲げ半径で描きます。';
+      }
+    } else if (way === 'field') {
+      if (fieldR && fieldR.some(function (v) { return v > 0; })) {
+        radii = fieldR;
+        var uniqF = radii.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
+        note = '現場曲げの最小曲げ半径（芯）' + uniqF.map(fmt).join(' / ') +
+          'mm で描いています。「曲げの内側の半径は管内径の6倍以上」から、' +
+          '内径×6 ＋ 外径÷2 で出した下限値です';
+        note += bendMaterial === '樹脂'
+          ? '（金属管の内線規程 3110-8 と同じ扱いにしています。合成樹脂管の条文は未確認です）。'
+          : '（内線規程 3110-8）。';
+        note += ' 実際にはこれより大きく曲げることが多いので、' +
+          '墨出しの位置は曲げ加工タブの「取り代」で確かめてください。';
+      } else if (ods) {
+        note = '外径だけの入力では内径が分からないので、最小曲げ半径を出せません。' +
+          '一覧から配管を選ぶか、「半径を描かない」にしてください。';
+        noteKind = 'warn';
+      } else {
+        note = '配管を選ぶと、現場曲げの最小曲げ半径で描きます。';
+      }
+    }
 
     stag.figure.innerHTML = F.staggerSVG({
       pitches: pitches,
       offsets: r.offsets,
       angle: angle,
       ods: ods,
-      radii: isNormalBend ? radii : null,
+      radii: radii,
       pitchesAfter: r.pairs.map(function (p) { return p.pitchAfter; })
     });
 
-    if (isNormalBend) {
-      var uniq = radii.filter(function (v, i, a) { return a.indexOf(v) === i; });
-      stag.note.hidden = false;
-      stag.note.textContent = '90°はノーマルベンドとして、曲げ半径 ' +
-        uniq.map(fmt).join(' / ') + 'mm（内線規程の最小＝内径×6 ＋ 外径÷2）で描いています。' +
-        '実際の半径は継手の製品によって変わりますが、どの管も同じ半径の継手を使うかぎり、' +
-        '曲げ位置のずらし量は変わりません。';
-    } else {
-      stag.note.hidden = true;
-    }
+    stag.note.className = 'msg' + (noteKind ? ' ' + noteKind : '');
+    stag.note.textContent = note;
+    stag.note.hidden = !note;
 
     var rows = r.offsets.map(function (x, i) {
       return '<tr><td>' + (i + 1) + '</td>' +
@@ -899,17 +955,32 @@
       html += msg('外寸が曲げ半径に対して短すぎます。この半径では曲げきれません。', 'bad');
     }
 
-    // 選んだ管があれば、内線規程の最小曲げ半径と突き合わせる
+    // 選んだ管があれば、現場曲げの下限と既製継手の寸法を並べて出す
     if (p && p.size) {
       var mb = C.minBendRadius(p.size.id, p.size.od);
-      html += kv([
+      var tnb = D.findNormalBend(p.size.key);
+      var pairs = [
         [p.label + ' の最小曲げ半径（内側）', fmt(mb.inner) + ' mm'],
         ['同じく管の芯で', fmt(mb.center) + ' mm']
-      ]);
-      if (r.radius < mb.center) {
+      ];
+      if (tnb) {
+        pairs.push(['ノーマルベンドの半径（芯）', fmt(tnb.r) + ' mm']);
+        pairs.push(['同じく面間寸法', fmt(tnb.l) + ' mm']);
+      }
+      html += kv(pairs);
+
+      // 既製継手の半径をそのまま入れている場合は、6倍ルールの対象外
+      var isFitting = tnb && Math.abs(r.radius - tnb.r) < 0.5;
+      if (isFitting) {
+        html += msg('入力した半径は ' + p.label + ' のノーマルベンド（JIS C 8330）の寸法です。' +
+          '内線規程の「内径の6倍以上」は現場でのベンダー曲げに対する規定なので、' +
+          '既製継手には当てはまりません。', 'ok');
+      } else if (r.radius < mb.center) {
         html += msg('曲げ半径が内線規程の下限を下回っています。' +
           '内側の半径は管内径（' + fmt(p.size.id) + 'mm）の6倍以上、' +
-          '管の芯で ' + fmt(mb.center) + 'mm 以上にしてください。', 'bad');
+          '管の芯で ' + fmt(mb.center) + 'mm 以上にしてください' +
+          (tnb ? '（現場で曲げずにノーマルベンド 半径 ' + fmt(tnb.r) +
+            'mm を使う手もあります）' : '') + '。', 'bad');
       } else {
         html += msg('内線規程の「内側の半径は管内径の6倍以上」を満たしています。', 'ok');
       }
@@ -1223,7 +1294,7 @@
       even.gap, even.count, even.pitch], renderEven);
     bind([mixed.mode, mixed.gap, mixed.width, mixed.margin], renderMixed);
     bind([stag.pipe, stag.pipeOd, stag.pitch, stag.pitch2, stag.angle, stag.count,
-      stag.source], renderStagger);
+      stag.source, stag.bend], renderStagger);
     bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin,
       sup.stock, sup.first, sup.extra, sup.coupling, sup.saddle,
       sup.atJoint, sup.jointOffset, sup.jointMode], renderSupport);
@@ -1241,6 +1312,8 @@
         labels: mixedLatest.labels.slice(),
         ods: mixedLatest.ods.slice(),
         radii: mixedLatest.radii.slice(),
+        fieldRadii: mixedLatest.fieldRadii.slice(),
+        materials: mixedLatest.materials.slice(),
         pitches: mixedLatest.pitches.slice()
       };
       stag.source.value = 'mixed';

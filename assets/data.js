@@ -15,6 +15,9 @@
  *     合成樹脂管は対象なので true（PF/CD管は「接続点の両側」）。
  *   stockLength    = 定尺。鋼製電線管 3660 / 硬質ビニル電線管 4000。
  *     PF管・CD管はコイル巻きで定尺がないため null。
+ *
+ * ノーマルベンド（90°の既製継手）の寸法は JIS C 8330:1999 付図1・付図2。
+ * 下の NORMAL_BEND を参照。
  */
 (function (root) {
   'use strict';
@@ -180,6 +183,57 @@
     }
   ];
 
+  /* ノーマルベンド（90°の既製継手）の寸法。JIS C 8330:1999 付図1・付図2。
+   *   r = 管の芯（中心線）の曲げ半径 / a = 曲げ終わりから管端までの直線部
+   *   l = 面間寸法。全サイズで l = r + a が成立する
+   *   tol = JIS の公差（r・l それぞれに同値）。jis:false は規格外のメーカー品
+   * 薄鋼とねじなしは外径が同じなので、呼びが同じなら寸法も同じ。
+   * 呼び19は JIS の表1に無く、E19 のみメーカーの A型が存在する（C19 は製品なし）。
+   *
+   * 注意：内線規程 3110-8 の「内側の半径は管内径の6倍以上」は
+   * 「金属管を曲げる場合」＝現場でのベンダー曲げに対する規定であり、
+   * JIS規格品である既製継手には適用されない。実際、下の値はどれも6倍に達しない。 */
+  var NORMAL_BEND = {
+    'E:E19': { r: 70, a: 50, l: 120, tol: null, jis: false },
+    'E:E25': { r: 120, a: 50, l: 170, tol: 6 },
+    'E:E31': { r: 150, a: 60, l: 210, tol: 7 },
+    'E:E39': { r: 180, a: 75, l: 255, tol: 9 },
+    'E:E51': { r: 230, a: 100, l: 330, tol: 11 },
+    'E:E63': { r: 290, a: 120, l: 410, tol: 14 },
+    'E:E75': { r: 350, a: 150, l: 500, tol: 17 },
+
+    // C19 は製品がないため、あえて登録しない
+    'C:C25': { r: 120, a: 50, l: 170, tol: 6 },
+    'C:C31': { r: 150, a: 60, l: 210, tol: 7 },
+    'C:C39': { r: 180, a: 75, l: 255, tol: 9 },
+    'C:C51': { r: 230, a: 100, l: 330, tol: 11 },
+    'C:C63': { r: 290, a: 120, l: 410, tol: 14 },
+    'C:C75': { r: 350, a: 150, l: 500, tol: 17 },
+
+    'G:G16': { r: 90, a: 60, l: 150, tol: 4 },
+    'G:G22': { r: 110, a: 70, l: 180, tol: 5 },
+    'G:G28': { r: 140, a: 75, l: 215, tol: 7 },
+    'G:G36': { r: 170, a: 80, l: 250, tol: 8 },
+    'G:G42': { r: 210, a: 85, l: 295, tol: 10 },
+    'G:G54': { r: 235, a: 110, l: 345, tol: 11 },
+    'G:G70': { r: 275, a: 150, l: 425, tol: 13 },
+    'G:G82': { r: 310, a: 200, l: 510, tol: 15 },
+    'G:G92': { r: 355, a: 220, l: 575, tol: 17 },
+    'G:G104': { r: 395, a: 250, l: 645, tol: 19 }
+  };
+
+  /* ポリエチライニング電線管は鋼管部が厚鋼電線管と同じなので、厚鋼用の値を当てる。
+   * ライニング用の専用品の寸法は未確認なので、代表値として印を付けておく。 */
+  (function fillLinedBend() {
+    Object.keys(NORMAL_BEND).forEach(function (k) {
+      if (k.indexOf('G:') !== 0) return;
+      var v = NORMAL_BEND[k];
+      NORMAL_BEND['PE:' + k.slice(2)] = {
+        r: v.r, a: v.a, l: v.l, tol: v.tol, jis: v.jis, approx: true
+      };
+    });
+  })();
+
   /* PE管は呼びが厚鋼電線管と同じ G16… なので、名前だけではシリーズを特定できない。
    * シリーズ込みの一意キー（"PE:G16"）と、重複時にシリーズ名を足した表示ラベルを用意する。 */
   (function assignKeys() {
@@ -245,11 +299,23 @@
     return hit.length ? hit[0] : null;
   }
 
+  /**
+   * その呼びのノーマルベンドを引く。無ければ null（既製品が存在しない呼び）。
+   * @returns {{r,a,l,tol,jis,approx}|null} r は管の芯の曲げ半径
+   */
+  function findNormalBend(name) {
+    var size = findSize(name);
+    if (!size) return null;
+    return NORMAL_BEND[size.key] || null;
+  }
+
   var api = {
     PIPE_SERIES: PIPE_SERIES,
+    NORMAL_BEND: NORMAL_BEND,
     allSizes: allSizes,
     findSize: findSize,
-    findSeries: findSeries
+    findSeries: findSeries,
+    findNormalBend: findNormalBend
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
