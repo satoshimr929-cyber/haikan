@@ -447,6 +447,10 @@
     mixedLatest = {
       labels: out.items.map(function (it) { return it.label; }),
       ods: out.items.map(function (it) { return it.od; }),
+      // 図でノーマルベンドを描くための最小曲げ半径。内径が分かる管だけ出せる
+      radii: pipes.map(function (p) {
+        return p.size ? C.minBendRadius(p.size.id, p.size.od).center : 0;
+      }),
       pitches: out.pitches.slice()
     };
     mixed.toStagger.disabled = out.pitches.length === 0;
@@ -485,7 +489,7 @@
     angle: $('#stag-angle'), count: $('#stag-count'),
     pipe: $('#stag-pipe'), pipeOd: $('#stag-pipe-od'),
     source: $('#stag-source'), uniformRow: $('#stag-uniform-row'),
-    imported: $('#stag-imported'),
+    imported: $('#stag-imported'), note: $('#stag-note'),
     result: $('#stag-result'), figure: $('#stag-figure'),
     marks: $('#stag-marks'), quick: $('#stag-quick')
   };
@@ -504,12 +508,13 @@
     var after = stag.pitch2.value === '' ? undefined : parseFloat(stag.pitch2.value);
     var pitches, labels;
 
-    var ods = null;
+    var ods = null, radii = null;
 
     if (useMixed) {
       pitches = staggerImport.pitches;
       labels = staggerImport.labels;
       ods = staggerImport.ods || null;
+      radii = staggerImport.radii || null;
       stag.pitch2.placeholder = '手前と同じ（ばらばらのまま）';
       stag.imported.textContent = 'サイズ混在から ' + labels.length + ' 本を取り込みました（' +
         labels.join(' / ') + '）。ピッチは ' + pitches.map(fmt).join(' / ') + ' mm です。';
@@ -527,6 +532,11 @@
       if (sp) {
         ods = [];
         for (var j = 0; j < count; j++) ods.push(sp.od);
+        if (sp.size) {
+          var R = C.minBendRadius(sp.size.id, sp.size.od).center;
+          radii = [];
+          for (var m = 0; m < count; m++) radii.push(R);
+        }
       }
     }
 
@@ -579,13 +589,31 @@
     }
     stag.result.innerHTML = html;
 
+    // 90°はノーマルベンド（曲げ半径のある継手）を使うのが普通なので、
+    // 尖った角ではなく半径のある曲げとして描く。
+    // 継手の半径が同じなら曲げ位置のずらし量は変わらないので、計算はそのまま。
+    var isNormalBend = Math.abs(angle - 90) < 1e-9 && radii &&
+      radii.some(function (v) { return v > 0; });
+
     stag.figure.innerHTML = F.staggerSVG({
       pitches: pitches,
       offsets: r.offsets,
       angle: angle,
       ods: ods,
+      radii: isNormalBend ? radii : null,
       pitchesAfter: r.pairs.map(function (p) { return p.pitchAfter; })
     });
+
+    if (isNormalBend) {
+      var uniq = radii.filter(function (v, i, a) { return a.indexOf(v) === i; });
+      stag.note.hidden = false;
+      stag.note.textContent = '90°はノーマルベンドとして、曲げ半径 ' +
+        uniq.map(fmt).join(' / ') + 'mm（内線規程の最小＝内径×6 ＋ 外径÷2）で描いています。' +
+        '実際の半径は継手の製品によって変わりますが、どの管も同じ半径の継手を使うかぎり、' +
+        '曲げ位置のずらし量は変わりません。';
+    } else {
+      stag.note.hidden = true;
+    }
 
     var rows = r.offsets.map(function (x, i) {
       return '<tr><td>' + (i + 1) + '</td>' +
@@ -1212,6 +1240,7 @@
       staggerImport = {
         labels: mixedLatest.labels.slice(),
         ods: mixedLatest.ods.slice(),
+        radii: mixedLatest.radii.slice(),
         pitches: mixedLatest.pitches.slice()
       };
       stag.source.value = 'mixed';

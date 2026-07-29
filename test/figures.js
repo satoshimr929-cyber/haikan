@@ -80,7 +80,14 @@ var CASES = [
     { 'stag-pipe': 'E:E19', 'stag-pitch': '75', 'stag-count': '4', 'stag-angle': '90' },
     { 'stag-pipe': 'G:G104' }, { 'stag-pipe': 'G:G104', 'stag-pitch': '60' },
     { 'stag-pipe': 'G:G104', 'stag-angle': '30', 'stag-count': '6' },
-    { 'stag-pipe': '__direct__' }
+    { 'stag-pipe': '__direct__' },
+    // 90°はノーマルベンド（曲げ半径のある継手）として描く
+    { 'stag-pipe': 'E:E25', 'stag-angle': '90', 'stag-pitch': '75', 'stag-count': '4' },
+    { 'stag-pipe': 'G:G104' },                       // 半径が大きい
+    { 'stag-pipe': 'G:G104', 'stag-pitch': '150' },  // 半径がピッチより大きい
+    { 'stag-pipe': 'E:E19', 'stag-count': '8' },
+    { 'stag-pipe': 'E:E25', 'stag-pitch2': '150' },  // 曲げた先を広げる
+    { 'stag-angle': '89.9' }                         // 90°から外れると尖った角に戻る
   ] },
   { tab: 'pitch', mode: 'support', fig: '#sup-figure', sets: [
     { 'sup-length': '5000', 'sup-stock': '', 'sup-extra': '' },
