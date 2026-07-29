@@ -516,11 +516,31 @@
     afterKind: $('#stag-after-kind'), pitch2Label: $('#stag-pitch2-label'),
     pitch2Calc: $('#stag-pitch2-calc'),
     insert: $('#stag-insert'), insertField: $('#stag-insert-field'),
-    insertKind: $('#stag-insert-kind'), insertManual: $('#stag-insert-manual')
+    insertKind: $('#stag-insert-kind'), insertManual: $('#stag-insert-manual'),
+    insertLabel: $('#stag-insert-label'),
+    insertManualLabel: $('#stag-insert-manual label')
   };
 
   // サイズ混在から持ち込んだ並び（{labels:[], pitches:[]}）。無ければ null
   var staggerImport = null;
+
+  /**
+   * 「継手への差し込み」の選択肢を、管のつなぎ方に合わせて出し入れする。
+   * B形ノーマルベンドの受口も ねじなしカップリングも E管だけのものなので、
+   * ねじ込み管（C管・G管・PE管）では隠す。隠した選択が選ばれていたら
+   * 「見込まない」へ落とす（0扱いなので、黙って寸法が変わることはない）。
+   */
+  function setInsertOptions(hasSocket) {
+    ['socket', 'coupling'].forEach(function (v) {
+      var op = $('#stag-insert-kind option[value="' + v + '"]');
+      op.hidden = !hasSocket;
+      op.disabled = !hasSocket;
+    });
+    if (!hasSocket && (stag.insertKind.value === 'socket' ||
+        stag.insertKind.value === 'coupling')) {
+      stag.insertKind.value = 'none';
+    }
+  }
 
   function renderStagger() {
     // サイズ混在から持ち込んだ並びが無ければ、取り込みは選べない
@@ -538,7 +558,7 @@
     var normalV = null;   // 製品によって寸法が違う呼び（19）かどうか
     var fitIns = null;    // 継手への差し込み寸法（{socket, coupling}）。無ければ null
     var fieldR = null;    // 現場曲げ（ベンダー）の最小曲げ半径（芯）。内径不明なら 0
-    var bend = null, bendLabel = '', bendMaterial = '';  // 一定ピッチのときの管の情報
+    var bend = null, bendLabel = '', bendMaterial = '', bendConnection = '';
 
     if (useMixed) {
       pitches = staggerImport.pitches;
@@ -569,6 +589,7 @@
         bend = nb;
         bendLabel = sp.label;
         bendMaterial = sp.size ? sp.size.material : '';
+        bendConnection = sp.size ? sp.size.connection : '';
         var fi = sp.size ? D.findFittingInsert(sp.size.key) : null;
         ods = []; normalR = []; normalL = []; normalV = []; fieldR = []; fitIns = [];
         for (var j = 0; j < count; j++) {
@@ -765,7 +786,17 @@
     // ノーマルベンドを使うなら、管は交点まで届かない。継手の端が来る位置で切る。
     // サイズが混ざると管ごとに面間寸法が変わるので、切断位置のずれは
     // 曲げ位置（交点）のずれとは一致しない。そこを表と図で見えるようにする。
-    var cut = null, insKind = stag.insertKind.value, insMissing = false;
+    // B形・A形の区別はねじなし電線管（E管）だけの話。ねじ込み管では
+    // 受口もカップリングも無いので、その2つは選べないようにする。
+    var hasSocket = !!(fitIns && fitIns.some(function (v) { return v; }));
+    setInsertOptions(hasSocket);
+    var insKind = stag.insertKind.value;
+    // 「ねじ込み」と言い切るのは、そう分かっている管のときだけにする
+    var screwed = !hasSocket && bendConnection === 'ねじ込み';
+    stag.insertLabel.textContent = screwed ? '継手へのねじ込み' : '継手への差し込み';
+    stag.insertManualLabel.textContent = screwed ? 'ねじ込み深さ' : '差し込み深さ';
+
+    var cut = null, insMissing = false;
     if (faces && faces.some(function (v) { return v > 0; })) {
       // 差し込み寸法は呼びごとに違うので、管ごとに引く。
       // ねじ込み接続の管（薄鋼・厚鋼・ライニング）には表が無いので手入力になる。
@@ -890,9 +921,12 @@
         note += ' これは継手の面間寸法そのもので、差し込むぶんは見込んでいません。';
       }
       if (insMissing) {
-        note += ' ねじ込み接続の管は差し込み寸法の表を持っていないので、' +
-          'その管は面間寸法のまま出しています。実測して「手入力」に入れてください。';
+        note += ' 受口のある継手が無い管が混ざっています。その管は面間寸法のまま' +
+          '出しているので、ねじ込む分は実測して「手入力」に入れてください。';
         noteKind = noteKind || 'warn';
+      } else if (!hasSocket && insKind === 'none' && bendConnection === 'ねじ込み') {
+        note += ' ' + bendLabel + ' はねじ込み接続なので、B形・A形の区別はありません。' +
+          'ねじ込む分を見込むなら「手入力」に入れてください。';
       }
       if (cut.backs.some(function (v, i) { return faces[i] > 0 && v <= 0; })) {
         note += ' 差し込み深さが面間寸法以上になっています。値を見直してください。';

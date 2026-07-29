@@ -265,8 +265,10 @@
       </div>
 
       <div class="field" id="stag-insert-field">
-        <label for="stag-insert-kind">継手への差し込み</label>
+        <label for="stag-insert-kind" id="stag-insert-label">継手への差し込み</label>
         <select id="stag-insert-kind">
+          <!-- 上の2つはねじなし電線管（E管）だけの選択肢。
+               ねじ込み管を選んでいるあいだは JS が隠す。 -->
           <option value="socket">B形ノーマルベンド（受口に差し込む）</option>
           <option value="coupling">A形＋カップリング</option>
           <option value="none">見込まない（面まで）</option>

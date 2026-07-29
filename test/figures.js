@@ -104,7 +104,12 @@ var CASES = [
     { 'stag-insert-kind': 'manual', 'stag-insert': '30' },
     { 'stag-insert': '170' }, { 'stag-insert': '300' },
     { 'stag-insert-kind': 'none' },
-    { 'stag-pipe': 'G:G104', 'stag-pitch': '150', 'stag-insert-kind': 'socket' },
+    // ねじ込み管に切り替えると B形・A形は選べなくなる（選択が残らないこと）
+    { 'stag-insert-kind': 'socket', 'stag-pipe': 'G:G104', 'stag-pitch': '150' },
+    { 'stag-pipe': 'C:C25', 'stag-pitch': '75' },
+    { 'stag-pipe': 'PE:G28' },
+    { 'stag-insert-kind': 'manual', 'stag-insert': '20' },
+    { 'stag-pipe': 'E:E25', 'stag-insert-kind': 'socket' },   // 戻せば復活する
     { 'stag-insert-kind': 'none' },
     { 'stag-pipe': 'E:E19', 'stag-pitch': '40', 'stag-count': '10' },  // 継手が密に並ぶ
     { 'stag-pipe': 'E:E25', 'stag-pitch': '75', 'stag-count': '4', 'stag-pitch2': '150' },
@@ -223,6 +228,18 @@ var CASES = [
           if (r.clip.length) fail(label + ' : はみ出し ' + r.clip.join(' '));
           if (r.overlaps) fail(label + ' : ラベルの重なり ' + r.overlaps);
         }
+
+        // 隠した選択肢が選ばれたままになっていないか
+        // （B形・A形はねじなし管だけの選択肢）
+        var stuck = await page.evaluate(function () {
+          var bad = [];
+          Array.prototype.forEach.call(document.querySelectorAll('select'), function (s) {
+            var op = s.selectedOptions[0];
+            if (op && (op.hidden || op.disabled)) bad.push(s.id + '=' + s.value);
+          });
+          return bad;
+        });
+        if (stuck.length) fail(label + ' : 隠れた選択肢が選ばれている ' + stuck.join(' '));
       }
     }
 
