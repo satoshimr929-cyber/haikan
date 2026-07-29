@@ -23,11 +23,13 @@
       '<span class="unit-t">' + esc(unit || '') + '</span></div>';
   }
 
-  function kv(pairs) {
-    return '<div class="kv">' + pairs.map(function (p) {
-      return '<div><div class="k">' + esc(p[0]) + '</div>' +
-        '<div class="v">' + esc(p[1]) + '</div></div>';
-    }).join('') + '</div>';
+  /** @param {string} [heading] 何のまとまりかを上に添える見出し */
+  function kv(pairs, heading) {
+    return (heading ? '<p class="kv-head">' + esc(heading) + '</p>' : '') +
+      '<div class="kv">' + pairs.map(function (p) {
+        return '<div><div class="k">' + esc(p[0]) + '</div>' +
+          '<div class="v">' + esc(p[1]) + '</div></div>';
+      }).join('') + '</div>';
   }
 
   function msg(text, kind) {
@@ -1282,15 +1284,18 @@
     if (p && p.size) {
       var mb = C.minBendRadius(p.size.id, p.size.od);
       var tnb = D.findNormalBend(p.size.key);
-      var pairs = [
-        [p.label + ' の最小曲げ半径（内側）', fmt(mb.inner) + ' mm'],
-        ['同じく管の芯で', fmt(mb.center) + ' mm']
-      ];
+      // 「現場で曲げる場合の下限」と「既製継手の寸法」は別の話なので、
+      // ひとまとまりに見えないよう見出しを付けて分ける
+      html += kv([
+        ['内側の面での半径（内径 ' + fmt(p.size.id) + ' × 6）', fmt(mb.inner) + ' mm'],
+        ['管の芯での半径（上 ＋ 外径 ÷ 2）', fmt(mb.center) + ' mm']
+      ], p.label + ' を現場で曲げる場合の最小半径（内線規程 3110-8）');
       if (tnb) {
-        pairs.push(['ノーマルベンドの半径（芯）', fmt(tnb.r) + ' mm']);
-        pairs.push(['同じく面間寸法', fmt(tnb.l) + ' mm']);
+        html += kv([
+          ['曲げ半径（管の芯）', fmt(tnb.r) + ' mm'],
+          ['面間寸法（交点から継手の端まで）', fmt(tnb.l) + ' mm']
+        ], p.label + ' のノーマルベンドを使う場合（JIS C 8330 の規定寸法）');
       }
-      html += kv(pairs);
 
       // 既製継手の半径をそのまま入れている場合は、6倍ルールの対象外
       var isFitting = tnb && Math.abs(r.radius - tnb.r) < 0.5;
