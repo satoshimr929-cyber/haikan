@@ -457,6 +457,11 @@
         var nb = p.size ? D.findNormalBend(p.size.key) : null;
         return nb ? nb.l : 0;
       }),
+      // 呼び19のように製品差がある管の印
+      varies: pipes.map(function (p) {
+        var nb = p.size ? D.findNormalBend(p.size.key) : null;
+        return !!(nb && nb.varies);
+      }),
       // 継手への差し込み寸法。呼びごとに違うので管ごとに持っていく
       inserts: pipes.map(function (p) {
         return p.size ? D.findFittingInsert(p.size.key) : null;
@@ -529,6 +534,7 @@
     var ods = null;
     var normalR = null;   // ノーマルベンド（既製継手）の芯の曲げ半径。無い呼びは 0
     var normalL = null;   // 同じく面間寸法（交点から継手の端まで）。無い呼びは 0
+    var normalV = null;   // 製品によって寸法が違う呼び（19）かどうか
     var fitIns = null;    // 継手への差し込み寸法（{socket, coupling}）。無ければ null
     var fieldR = null;    // 現場曲げ（ベンダー）の最小曲げ半径（芯）。内径不明なら 0
     var bend = null, bendLabel = '', bendMaterial = '';  // 一定ピッチのときの管の情報
@@ -539,6 +545,7 @@
       ods = staggerImport.ods || null;
       normalR = staggerImport.radii || null;
       normalL = staggerImport.faces || null;
+      normalV = staggerImport.varies || null;
       fitIns = staggerImport.inserts || null;
       fieldR = staggerImport.fieldRadii || null;
       // 1本でも樹脂管が混ざっていれば、条文未確認である旨を添える
@@ -565,11 +572,12 @@
         bendLabel = sp.label;
         bendMaterial = sp.size ? sp.size.material : '';
         var fi = sp.size ? D.findFittingInsert(sp.size.key) : null;
-        ods = []; normalR = []; normalL = []; fieldR = []; fitIns = [];
+        ods = []; normalR = []; normalL = []; normalV = []; fieldR = []; fitIns = [];
         for (var j = 0; j < count; j++) {
           ods.push(sp.od);
           normalR.push(nb ? nb.r : 0);
           normalL.push(nb ? nb.l : 0);
+          normalV.push(!!(nb && nb.varies));
           fieldR.push(fr);
           fitIns.push(fi);
         }
@@ -639,11 +647,13 @@
         radii = normalR;
         faces = normalL;
         var uniq = radii.filter(function (v, i, a) { return v > 0 && a.indexOf(v) === i; });
-        note = 'ノーマルベンドの曲げ半径（芯）' + uniq.map(fmt).join(' / ') +
-          'mm で描いています。JIS C 8330 の規定寸法なので、メーカーによる違いはありません。';
-        if (bend && bend.jis === false) {
-          note += ' ただし呼び19は JIS の規定になく、メーカーの A型のみです。';
-        }
+        note = 'ノーマルベンドの曲げ半径（芯）' + uniq.map(fmt).join(' / ') + 'mm で描いています。';
+        // 呼び19だけは JIS 表1 に無く、製品によって寸法が違う
+        note += (normalV || []).some(function (v, i) { return v && faces[i] > 0; })
+          ? '呼び19は JIS C 8330 表1 の呼びに入っておらず、製品によって寸法が違います' +
+            '（パナソニック DS0319 は半径90・面間135、外山 TCNA19（A形）は半径70・面間120）。' +
+            'ここはパナソニックの値で描いているので、使う製品を確かめてください。'
+          : 'JIS C 8330 の規定寸法なので、メーカーによる違いはありません。';
         if (bend && bend.approx) {
           note += ' ポリエチライニング用の専用品の寸法は未確認のため、厚鋼用の値を当てています。';
         }
@@ -651,8 +661,9 @@
           note += ' 既製品が無い呼びは尖った角のまま描いています。';
         }
       } else if (!useMixed && bendLabel && !bend) {
-        note = bendLabel + ' のノーマルベンドは規格にも製品にもありません。' +
-          '現場でのベンダー曲げになるので、「現場曲げ」に切り替えてください。';
+        note = bendLabel + ' のノーマルベンドは製品を確認できていません' +
+          '（JIS C 8330 表1 の呼びにも入っていません）。現場でのベンダー曲げになるので、' +
+          '「現場曲げ」に切り替えてください。製品が見つかれば寸法を入れられます。';
         noteKind = 'warn';
       } else if (!ods) {
         note = '配管を選ぶと、ノーマルベンドの曲げ半径で描きます。';
@@ -1485,6 +1496,7 @@
         ods: mixedLatest.ods.slice(),
         radii: mixedLatest.radii.slice(),
         faces: mixedLatest.faces.slice(),
+        varies: mixedLatest.varies.slice(),
         inserts: mixedLatest.inserts.slice(),
         fieldRadii: mixedLatest.fieldRadii.slice(),
         materials: mixedLatest.materials.slice(),
