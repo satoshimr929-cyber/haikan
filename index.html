@@ -197,6 +197,8 @@
         ずらし量 =（曲げた先のピッチ − 手前のピッチ × cos角度）÷ sin角度。
         サイズ混在で並べた配管は、そちらの「曲げのずらしへ送る」で持ち込めます
         （径が違えばピッチも変わるので、ペアごとに計算します）。
+        ノーマルベンドを使うか現場で曲げるかを選ぶと、その曲げ半径で図を描きます
+        （どちらでもずらし量は変わりません）。
       </p>
 
       <div class="field">
@@ -240,6 +242,15 @@
           <label for="stag-angle">曲げ角度</label>
           <div class="unit"><input type="number" id="stag-angle" step="1" value="90"><span>度</span></div>
         </div>
+      </div>
+
+      <div class="field">
+        <label for="stag-bend">曲げ方</label>
+        <select id="stag-bend">
+          <option value="normal">ノーマルベンド（既製継手・90°）</option>
+          <option value="field">現場曲げ（ベンダー・最小半径）</option>
+          <option value="none">半径を描かない</option>
+        </select>
       </div>
 
       <div class="quick" id="stag-quick" data-target="stag-angle">
