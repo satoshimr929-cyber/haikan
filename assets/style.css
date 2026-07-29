@@ -348,6 +348,16 @@ select { appearance: none; background-image: none; }
   stroke-dasharray: 8 3 2 3;
   stroke-linejoin: round;
 }
+/* ノーマルベンド（既製継手）が据わる範囲と、その両端＝管の切断位置 */
+.figure .fitting {
+  fill: none;
+  stroke: var(--fg-dim);
+  opacity: .5;
+  stroke-linejoin: round;
+  stroke-linecap: butt;
+}
+.figure .cut { stroke: var(--bad); stroke-width: 2; stroke-linecap: round; }
+
 /* 管の接続点（カップリング）と、そこに当たっているサドル */
 .figure .coupling { fill: var(--fg-dim); opacity: .55; }
 .figure .saddle-bad { stroke: var(--bad); stroke-width: 2.5; }

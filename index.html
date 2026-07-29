@@ -198,7 +198,7 @@
         サイズ混在で並べた配管は、そちらの「曲げのずらしへ送る」で持ち込めます
         （径が違えばピッチも変わるので、ペアごとに計算します）。
         ノーマルベンドを使うか現場で曲げるかを選ぶと、その曲げ半径で図を描きます
-        （どちらでもずらし量は変わりません）。
+        （どちらでもずらし量は変わりません）。ノーマルベンドなら管の切断位置も出します。
       </p>
 
       <div class="field">
@@ -251,6 +251,13 @@
           <option value="field">現場曲げ（ベンダー・最小半径）</option>
           <option value="none">半径を描かない</option>
         </select>
+      </div>
+
+      <div class="field" id="stag-insert-field">
+        <label for="stag-insert">継手への差し込み深さ</label>
+        <div class="unit">
+          <input type="number" id="stag-insert" step="1" min="0" value="0"><span>mm</span>
+        </div>
       </div>
 
       <div class="quick" id="stag-quick" data-target="stag-angle">

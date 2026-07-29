@@ -724,6 +724,46 @@ is('PE管の品番が引ける', D.findSize('PE:G28').code, 'DWL28K');
 eq('小文字でも引ける', D.findSize('e25').od, 25.4);
 check('無いサイズは null', D.findSize('X99') === null);
 
+console.log('\nnormalBendCuts（ノーマルベンドを使うときの切断位置）');
+// 同じ呼びで揃えた並び：面間寸法が同じなので、切断位置は交点と同じだけずれる
+var cutA = C.normalBendCuts([0, 75, 150, 225], [170, 170, 170, 170]);
+eq('1本目の切断位置は0', cutA.cuts[0], 0);
+eq('同じ継手なら切断位置のずれ＝交点のずれ', cutA.cuts[3], 225);
+check('ずれもピッチどおり', cutA.shifts.every(function (v) { return Math.abs(v - 75) < 1e-9; }));
+eq('交点から戻す距離は面間寸法そのもの', cutA.backs[0], 170);
+check('すべての管に継手があれば ok', cutA.ok === true);
+
+// 差し込み深さは全管に同じだけ効くので、相対位置は変わらず戻す距離だけ縮む
+var cutB = C.normalBendCuts([0, 75, 150, 225], [170, 170, 170, 170], 30);
+check('差し込んでも切断位置の相対関係は変わらない',
+  cutB.cuts.every(function (v, i) { return Math.abs(v - cutA.cuts[i]) < 1e-9; }));
+eq('戻す距離は面間寸法 − 差し込み深さ', cutB.backs[0], 140);
+eq('差し込み深さを覚えている', cutB.insert, 30);
+
+// サイズが混ざると面間寸法が変わり、切断位置のずれは交点のずれと一致しなくなる
+var e25 = D.findNormalBend('E:E25'), e31 = D.findNormalBend('E:E31');
+var e51 = D.findNormalBend('E:E51');
+var cutC = C.normalBendCuts([0, 48.6, 109.9], [e25.l, e31.l, e51.l]);
+eq('2本目の切断位置 = 交点のずれ − 面間寸法の差', cutC.cuts[1], 48.6 - (210 - 170), 1e-9);
+eq('3本目の切断位置', cutC.cuts[2], 109.9 - (330 - 170), 1e-9);
+check('交点は先へ進むのに切断位置は手前へ戻ることがある',
+  cutC.cuts[2] < 0 && 109.9 > 0);
+eq('合計は最後の管の切断位置', cutC.total, cutC.cuts[2]);
+eq('切断位置のずれは交点のずれと一致しない', cutC.shifts[1], cutC.cuts[2] - cutC.cuts[1], 1e-9);
+
+// 継手が無い呼びは 0 を渡す約束
+var cutD = C.normalBendCuts([0, 75], [0, 170]);
+check('継手が無い管が混ざれば ok=false', cutD.ok === false);
+eq('継手が無い管の戻す距離は0', cutD.backs[0], 0);
+
+throws('配列の数が合わなければ例外', function () { C.normalBendCuts([0, 75], [170]); });
+throws('空の配列は例外', function () { C.normalBendCuts([], []); });
+throws('配列でなければ例外', function () { C.normalBendCuts(0, 170); });
+throws('差し込み深さが負なら例外', function () {
+  C.normalBendCuts([0, 75], [170, 170], -5);
+});
+throws('面間寸法が負なら例外', function () { C.normalBendCuts([0], [-170]); });
+
 console.log('\nノーマルベンド（JIS C 8330 の既製継手）');
 var NB = D.NORMAL_BEND;
 var nbKeys = Object.keys(NB);
