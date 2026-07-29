@@ -513,6 +513,8 @@
     imported: $('#stag-imported'), note: $('#stag-note'),
     result: $('#stag-result'), figure: $('#stag-figure'),
     marks: $('#stag-marks'), quick: $('#stag-quick'), bend: $('#stag-bend'),
+    afterKind: $('#stag-after-kind'), pitch2Label: $('#stag-pitch2-label'),
+    pitch2Calc: $('#stag-pitch2-calc'),
     insert: $('#stag-insert'), insertField: $('#stag-insert-field'),
     insertKind: $('#stag-insert-kind'), insertManual: $('#stag-insert-manual')
   };
@@ -528,7 +530,6 @@
     stag.imported.hidden = !useMixed;
 
     var angle = parseFloat(stag.angle.value);
-    var after = stag.pitch2.value === '' ? undefined : parseFloat(stag.pitch2.value);
     var pitches, labels;
 
     var ods = null;
@@ -550,15 +551,12 @@
       fieldR = staggerImport.fieldRadii || null;
       // 1本でも樹脂管が混ざっていれば、条文未確認である旨を添える
       if ((staggerImport.materials || []).indexOf('樹脂') >= 0) bendMaterial = '樹脂';
-      stag.pitch2.placeholder = '手前と同じ（ばらばらのまま）';
       stag.imported.textContent = 'サイズ混在から ' + labels.length + ' 本を取り込みました（' +
         labels.join(' / ') + '）。ピッチは ' + pitches.map(fmt).join(' / ') + ' mm です。';
     } else {
       var pitch = parseFloat(stag.pitch.value);
       var count = parseInt(stag.count.value, 10);
       if (!(count >= 2)) count = 2;
-      stag.pitch2.placeholder = isFinite(pitch)
-        ? '手前と同じ（' + fmt(pitch) + '）' : '手前と同じ';
       pitches = [];
       for (var k = 0; k < count - 1; k++) pitches.push(pitch);
       labels = null;
@@ -584,6 +582,45 @@
       }
     }
 
+    // 曲げた先は、芯々ピッチでもあきでも指定できる。あきで指定した場合は
+    // ペアごとに管の半径ぶんを足してピッチに直す（径が違えばピッチも変わる）。
+    var wantGap = stag.afterKind.value === 'gap';
+    var halves = pitches.map(function (v, i) {
+      return ods ? (ods[i] + ods[i + 1]) / 2 : 0;
+    });
+    // あきで指定するには外径が要る。分からなければピッチとして扱う
+    // （選択そのものは書き換えない。管を選び直せばそのまま効くように）
+    var canGap = !!ods && halves.every(function (v) { return v > 0; });
+    var afterKind = wantGap && canGap ? 'gap' : 'pitch';
+
+    // 指定の種類を切り替えたとき、配置が飛ばないよう半径ぶんを足し引きする
+    var prevKind = stag.pitch2.dataset.prevKind;
+    if (stag.pitch2.value !== '' && prevKind && prevKind !== afterKind && canGap) {
+      var pv = parseFloat(stag.pitch2.value);
+      if (isFinite(pv)) {
+        stag.pitch2.value = fmt(afterKind === 'gap' ? pv - halves[0] : pv + halves[0]);
+      }
+    }
+    stag.pitch2.dataset.prevKind = afterKind;
+
+    stag.pitch2Label.textContent = afterKind === 'gap'
+      ? '曲げた先の管と管のあき' : '曲げた先の芯々ピッチ';
+    stag.pitch2.placeholder = useMixed
+      ? '手前と同じ（ばらばらのまま）'
+      : (isFinite(pitch)
+        ? '手前と同じ（' + fmt(afterKind === 'gap' ? pitch - halves[0] : pitch) + '）'
+        : '手前と同じ');
+
+    var after;
+    if (stag.pitch2.value === '') {
+      after = undefined;                       // 手前と同じ（あき指定でも同じこと）
+    } else if (afterKind === 'gap') {
+      var gap = parseFloat(stag.pitch2.value);
+      after = halves.map(function (h) { return gap + h; });
+    } else {
+      after = parseFloat(stag.pitch2.value);
+    }
+
     var r;
     try {
       r = C.parallelStaggerList(pitches, angle, after);
@@ -596,17 +633,45 @@
     var count2 = r.offsets.length;
     var shifts = r.pairs.map(function (p) { return p.stagger; });
     var uniform = shifts.every(function (v) { return Math.abs(v - shifts[0]) < 1e-6; });
-    var sameP = r.pairs.every(function (p) { return p.pitchAfter === p.pitch; });
+    // あきから逆算したピッチは端数が出るので、ぴったり一致は求めない
+    var sameP = r.pairs.every(function (p) { return Math.abs(p.pitchAfter - p.pitch) < 1e-6; });
 
     var html = uniform
       ? big('隣の管とのずらし量', fmt(shifts[0]), 'mm')
       : big('端から端のずらし合計', fmt(r.total), 'mm');
 
+    // 指定していないほうの寸法（ピッチで入れたらあき、あきで入れたらピッチ）
+    var afters = r.pairs.map(function (p) { return p.pitchAfter; });
+    var gapsAfter = canGap ? afters.map(function (v, i) { return v - halves[i]; }) : null;
+    // 表示は丸めるので、丸めたうえで重複を取る（48.6 と 48.599… を分けない）
+    var uniqBy = function (list) {
+      var seen = {};
+      return list.filter(function (v) {
+        var k = fmt(v);
+        if (seen[k]) return false;
+        seen[k] = 1;
+        return true;
+      });
+    };
+    var uniqAfter = uniqBy(afters);
+    var uniqGap = gapsAfter ? uniqBy(gapsAfter) : null;
+
+    stag.pitch2Calc.hidden = !canGap;
+    if (canGap) {
+      stag.pitch2Calc.className = 'hint' +
+        (uniqGap.some(function (v) { return v < 0; }) ? ' bad-text' : '');
+      stag.pitch2Calc.textContent = afterKind === 'gap'
+        ? '芯々ピッチでは ' + uniqAfter.map(fmt).join(' / ') + ' mm'
+        : '管と管のあきでは ' + uniqGap.map(fmt).join(' / ') + ' mm';
+    }
+
     html += kv([
       ['手前のピッチ', uniform && !useMixed ? fmt(pitches[0]) + ' mm'
         : pitches.map(fmt).join(' / ') + ' mm'],
       ['曲げた先のピッチ', sameP ? '手前と同じ'
-        : fmt(r.pairs[0].pitchAfter) + ' mm' + (r.pairs.length > 1 ? '（全ペア）' : '')],
+        : uniqAfter.map(fmt).join(' / ') + ' mm' +
+          (r.pairs.length > 1 && uniqAfter.length === 1 ? '（全ペア）' : '')],
+      ['曲げた先のあき', canGap ? uniqGap.map(fmt).join(' / ') + ' mm' : '—'],
       ['曲げ角度', fmt(angle) + ' °'],
       ['本数', count2 + ' 本'],
       ['端から端の合計', fmt(r.total) + ' mm']
@@ -628,8 +693,16 @@
     }
     if (!sameP) {
       html += msg('曲げ角度はどの管も ' + fmt(angle) + '° のままで、' +
-        '曲げ位置のずらし方だけで曲げた先のピッチを ' +
-        fmt(r.pairs[0].pitchAfter) + 'mm に揃えています。', '');
+        '曲げ位置のずらし方だけで曲げた先の' +
+        (afterKind === 'gap'
+          ? 'あきを ' + fmt(gapsAfter[0]) + 'mm に揃えています（径が違えばピッチは ' +
+            uniqAfter.map(fmt).join(' / ') + 'mm と変わります）。'
+          : 'ピッチを ' + uniqAfter.map(fmt).join(' / ') + 'mm に揃えています。'), '');
+    }
+    if (wantGap && !canGap) {
+      html += msg('あきで指定するには管の外径が要ります。' +
+        '一覧から配管を選ぶか、外径を直接入力してください。芯々ピッチとして計算しています。',
+      'warn');
     }
     // 曲げ方（ノーマルベンド／現場曲げ／半径なし）で、図に描く曲げ半径を決める。
     // どの管も同じ半径で曲げるかぎり曲げ位置のずらし量は変わらないので、計算はそのまま。
@@ -1477,7 +1550,8 @@
       even.gap, even.count, even.pitch], renderEven);
     bind([mixed.mode, mixed.gap, mixed.width, mixed.margin], renderMixed);
     bind([stag.pipe, stag.pipeOd, stag.pitch, stag.pitch2, stag.angle, stag.count,
-      stag.source, stag.bend, stag.insert, stag.insertKind], renderStagger);
+      stag.source, stag.bend, stag.insert, stag.insertKind,
+      stag.afterKind], renderStagger);
     bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin,
       sup.stock, sup.first, sup.extra, sup.coupling, sup.saddle,
       sup.atJoint, sup.jointOffset, sup.jointMode], renderSupport);

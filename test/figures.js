@@ -123,7 +123,19 @@ var CASES = [
     { '@import': '#mixed-to-stagger', 'stag-pitch2': '40', 'stag-angle': '90' },
     { 'stag-pitch2': '' }, { 'stag-bend': 'normal' },
     { 'stag-source': 'uniform', 'stag-pipe': 'E:E25', 'stag-pitch': '75',
-      'stag-count': '4', 'stag-pitch2': '' }
+      'stag-count': '4', 'stag-pitch2': '' },
+    // 曲げた先を「管と管のあき」で指定する
+    { 'stag-after-kind': 'gap', 'stag-pitch2': '20' },
+    { 'stag-pitch2': '5' }, { 'stag-pitch2': '0' }, { 'stag-pitch2': '-5' },
+    { 'stag-pitch2': '200' }, { 'stag-pitch2': '' },
+    { 'stag-angle': '45' }, { 'stag-angle': '22.5', 'stag-pitch2': '30' },
+    { 'stag-pipe': 'G:G104', 'stag-pitch': '150', 'stag-angle': '90' },
+    { 'stag-pipe': '__direct__' },                       // 外径が無いのであき指定は効かない
+    { '@import': '#mixed-to-stagger', 'stag-pitch2': '20', 'stag-angle': '90' },
+    { 'stag-pitch2': '0' }, { 'stag-pitch2': '60' },
+    { 'stag-after-kind': 'pitch' },                      // 切り替えで値が換算される
+    { 'stag-source': 'uniform', 'stag-pipe': 'E:E25', 'stag-pitch': '75',
+      'stag-pitch2': '', 'stag-after-kind': 'pitch' }
   ] },
   { tab: 'pitch', mode: 'support', fig: '#sup-figure', sets: [
     { 'sup-length': '5000', 'sup-stock': '', 'sup-extra': '' },
