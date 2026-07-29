@@ -412,7 +412,16 @@
       <p class="hint">
         段差を2箇所の曲げで越えるときの、曲げと曲げの間隔（墨の間隔）と縮み代を出します。
         斜辺 = 段差 ÷ sin角度、縮み代 = 段差 × tan(角度 ÷ 2)。
+        配管を選ぶと、図を外径どおりの太さで描きます。
       </p>
+
+      <div class="field">
+        <label for="off-pipe">配管</label>
+        <div class="picker">
+          <select id="off-pipe" class="pipe-select"></select>
+          <input type="number" id="off-pipe-od" class="od-input" step="0.1" min="0" placeholder="外径 mm" hidden>
+        </div>
+      </div>
 
       <div class="field-row">
         <div class="field">
@@ -444,6 +453,7 @@
       <p class="hint">
         曲げ半径のぶん、外寸の合計より管は短くて済みます。その差（取り代）と切断長、
         曲げ始めの墨位置を出します。外寸は曲げなければ角になる点（交点）からの寸法です。
+        図は選んだ配管の外径どおりの太さで描きます。
       </p>
 
       <div class="field">
@@ -494,7 +504,16 @@
       <h2>障害物よけ（3方・4方曲げ）</h2>
       <p class="hint">
         梁やダクトをまたぐときの墨位置を出します。3方曲げは中央が側面の2倍の角度になります。
+        配管を選ぶと、図を外径どおりの太さで描きます。
       </p>
+
+      <div class="field">
+        <label for="sd-pipe">配管</label>
+        <div class="picker">
+          <select id="sd-pipe" class="pipe-select"></select>
+          <input type="number" id="sd-pipe-od" class="od-input" step="0.1" min="0" placeholder="外径 mm" hidden>
+        </div>
+      </div>
 
       <div class="field">
         <label for="sd-kind">曲げ方</label>

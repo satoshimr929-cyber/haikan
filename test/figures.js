@@ -170,19 +170,34 @@ var CASES = [
   { tab: 'bend', mode: 'offset', fig: '#off-figure', sets: [
     { 'off-rise': '100', 'off-angle': '30' }, { 'off-angle': '45' },
     { 'off-angle': '22.5' }, { 'off-angle': '60' }, { 'off-angle': '5' },
-    { 'off-rise': '1000', 'off-angle': '45' }, { 'off-rise': '10', 'off-angle': '85' }
+    { 'off-rise': '1000', 'off-angle': '45' }, { 'off-rise': '10', 'off-angle': '85' },
+    // 管の太さを描く（細い／太い／段差より太い／外径なし）
+    { 'off-pipe': 'E:E19', 'off-rise': '100', 'off-angle': '30' },
+    { 'off-pipe': 'G:G104' }, { 'off-pipe': 'G:G104', 'off-rise': '30' },
+    { 'off-pipe': 'G:G104', 'off-rise': '2000', 'off-angle': '60' },
+    { 'off-pipe': '__direct__' }, { 'off-pipe': 'E:E25' }
   ] },
   { tab: 'bend', mode: 'takeup', fig: '#tk-figure', sets: [
     { 'tk-a': '500', 'tk-b': '400', 'tk-radius': '200', 'tk-angle': '90' },
     { 'tk-angle': '45' }, { 'tk-angle': '22.5' }, { 'tk-angle': '135' },
     { 'tk-radius': '50' }, { 'tk-radius': '400' },
-    { 'tk-a': '2000', 'tk-b': '200', 'tk-radius': '150', 'tk-angle': '90' }
+    { 'tk-a': '2000', 'tk-b': '200', 'tk-radius': '150', 'tk-angle': '90' },
+    // 管の太さを描く
+    { 'tk-pipe': 'G:G104', 'tk-a': '500', 'tk-b': '400', 'tk-radius': '400' },
+    { 'tk-radius': '120', 'tk-angle': '45' }, { 'tk-pipe': 'E:E19', 'tk-radius': '90' },
+    { 'tk-pipe': '__direct__' }, { 'tk-pipe': 'E:E25', 'tk-radius': '200', 'tk-angle': '90' }
   ] },
   { tab: 'bend', mode: 'saddle', fig: '#sd-figure', sets: [
     { 'sd-kind': '3', 'sd-height': '50', 'sd-angle': '22.5' },
     { 'sd-angle': '30' }, { 'sd-angle': '45' }, { 'sd-height': '300', 'sd-angle': '45' },
     { 'sd-kind': '4', 'sd-height': '50', 'sd-width': '300', 'sd-angle': '22.5' },
-    { 'sd-width': '1500' }, { 'sd-height': '400', 'sd-width': '200', 'sd-angle': '45' }
+    { 'sd-width': '1500' }, { 'sd-height': '400', 'sd-width': '200', 'sd-angle': '45' },
+    // 管の太さを描く（障害物より太い場合も）
+    { 'sd-pipe': 'G:G104', 'sd-kind': '3', 'sd-height': '300', 'sd-angle': '45' },
+    { 'sd-height': '50', 'sd-angle': '22.5' },
+    { 'sd-kind': '4', 'sd-height': '100', 'sd-width': '300', 'sd-angle': '45' },
+    { 'sd-width': '2000', 'sd-height': '30' },
+    { 'sd-pipe': '__direct__' }, { 'sd-pipe': 'E:E25' }
   ] }
 ];
 
