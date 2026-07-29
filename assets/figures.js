@@ -112,6 +112,8 @@
     var faces = radii && Array.isArray(o.faces) ? o.faces : null;
     // 交点から管の切断位置まで戻る距離。差し込み深さのぶん、面より内側になる
     var backs = faces && Array.isArray(o.cutBacks) ? o.cutBacks : faces;
+    // 管どうしが当たるところ（{at:[x,y]} の配列）。渡すと図に印を付ける
+    var clashes = Array.isArray(o.clashes) ? o.clashes : null;
     var count = offsets ? offsets.length : 0;
     if (count < 2 || !pitches || pitches.length !== count - 1) return '';
     if (!pitches.every(function (v) { return v > 0; })) return '';
@@ -269,6 +271,23 @@
         '" y1="' + Y(p.vertex[1]).toFixed(1) +
         '" x2="' + X(p.vertex[0]).toFixed(1) + '" y2="' + (dimY + 6) + '"/>');
     });
+
+    // 当たっているところに印を付ける。囲みの外に出た点は描かない
+    if (clashes) {
+      clashes.forEach(function (cl) {
+        if (!cl || !cl.at) return;
+        var cx = X(cl.at[0]), cy = Y(cl.at[1]);
+        if (cx < 0 || cx > W || cy < TOP - 12 || cy > TOP + drawH + 12) return;
+        var g = 7;
+        o.push('<circle class="clash" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) +
+          '" r="' + (g + 2) + '"/>');
+        o.push('<path class="clash-x" fill="none" d="M ' + (cx - g / 2).toFixed(1) + ' ' +
+          (cy - g / 2).toFixed(1) + ' L ' + (cx + g / 2).toFixed(1) + ' ' +
+          (cy + g / 2).toFixed(1) + ' M ' + (cx + g / 2).toFixed(1) + ' ' +
+          (cy - g / 2).toFixed(1) + ' L ' + (cx - g / 2).toFixed(1) + ' ' +
+          (cy + g / 2).toFixed(1) + '"/>');
+      });
+    }
 
     // 曲げずにまっすぐ進んだ場合の線と、そこからの振れ角
     var v0 = pipes[0].vertex;
