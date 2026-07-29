@@ -399,13 +399,16 @@
   /**
    * 見せたい点をすべて渡すと、はみ出さない縮尺と座標変換を返す。
    * @param {Array<[number,number]>} points モデル座標（y は下向き）
+   * @param {number} [pad] 囲みを四方へ広げる量（モデル座標）。
+   *   管を太さのある帯で描くとき、半径ぶんを渡すとはみ出さない。
    */
-  function makeCanvas(points) {
+  function makeCanvas(points, pad) {
     resetLabels();
+    var m = pad > 0 ? pad : 0;
     var xs = points.map(function (p) { return p[0]; });
     var ys = points.map(function (p) { return p[1]; });
-    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
-    var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    var minX = Math.min.apply(null, xs) - m, maxX = Math.max.apply(null, xs) + m;
+    var minY = Math.min.apply(null, ys) - m, maxY = Math.max.apply(null, ys) + m;
     var bw = maxX - minX, bh = maxY - minY;
     if (!(bw > 0) || !isFinite(bw) || !isFinite(bh)) return null;
 
@@ -432,6 +435,30 @@
   function open(c, label) {
     return '<svg viewBox="0 0 ' + c.W + ' ' + Math.round(c.H) +
       '" role="img" aria-label="' + esc(label) + '">';
+  }
+
+  /**
+   * 管を太さのある帯で描く。外周・内側・芯線の3枚を重ねる。
+   * 外径が分からない（od なし）か、細すぎて帯にならないときは1本の線で描く。
+   * @param {object} c   makeCanvas が返した変換
+   * @param {string} d   SVG のパス（画面座標で組み立て済み）
+   * @param {number} od  管の外径（モデル座標）
+   */
+  function pipeBand(c, d, od) {
+    var w = od > 0 ? od * c.s : 0;
+    if (!(w >= 5)) return '<path class="pipe-line" fill="none" d="' + d + '"/>';
+    return '<path class="pipe-wall" fill="none" style="stroke-width:' + w.toFixed(1) +
+      '" d="' + d + '"/>' +
+      '<path class="pipe-bore" fill="none" style="stroke-width:' +
+      Math.max(w - 3, 1).toFixed(1) + '" d="' + d + '"/>' +
+      '<path class="pipe-center" fill="none" d="' + d + '"/>';
+  }
+
+  /** モデル座標の点列を、そのままつなぐパスにする */
+  function pathOf(c, pts) {
+    return pts.map(function (p, i) {
+      return (i ? 'L ' : 'M ') + c.X(p[0]).toFixed(1) + ' ' + c.Y(p[1]).toFixed(1);
+    }).join(' ');
   }
 
   /** モデル座標の点列を折れ線で描く */
@@ -512,7 +539,7 @@
   /* -------------------------------------------------------- 曲げ加工の図 */
 
   /** オフセット（振り）を横から見た図 */
-  function offsetSVG(r) {
+  function offsetSVG(r, od) {
     if (!r || !(r.rise > 0) || !isFinite(r.travel)) return '';
 
     var lead = Math.max(r.run * 0.6, r.rise * 0.8, 30);
@@ -520,11 +547,11 @@
     var b2 = [lead + r.run, 0];              // 2つ目の曲げ
     var path = [[0, r.rise], b1, b2, [b2[0] + lead, 0]];
 
-    var c = makeCanvas(path);
+    var c = makeCanvas(path, od > 0 ? od / 2 : 0);
     if (!c) return '';
     var o = [open(c, 'オフセットの図')];
 
-    o.push(polyline(c, path));
+    o.push(pipeBand(c, pathOf(c, path), od));
     o.push(vertex(c, b1));
     o.push(vertex(c, b2));
     o.push(angleArc(c, b1, r.angle));
@@ -543,7 +570,7 @@
   }
 
   /** 曲げ半径のある1箇所の曲げを横から見た図 */
-  function takeupSVG(r) {
+  function takeupSVG(r, od) {
     if (!r || !(r.radius > 0)) return '';
 
     var t = r.angle * Math.PI / 180;
@@ -555,19 +582,19 @@
     var T2 = [r.tangent * cos, -r.tangent * sin];     // 曲げ終わり
     var O = [-r.tangent, -r.radius];                  // 円弧の中心
 
-    var c = makeCanvas([A, B, V, T1, T2, O]);
+    var c = makeCanvas([A, B, V, T1, T2, O], od > 0 ? od / 2 : 0);
     if (!c) return '';
     var o = [open(c, '曲げの取り代の図')];
 
-    // 曲げなければ角になる線（交点まで）を薄く
+    // 実際の管：直線 → 円弧 → 直線をひと続きのパスにして、太さのある帯で描く
+    var rr = (r.radius * c.s).toFixed(1);
+    var d = 'M ' + c.X(A[0]).toFixed(1) + ' ' + c.Y(A[1]).toFixed(1) +
+      ' L ' + c.X(T1[0]).toFixed(1) + ' ' + c.Y(T1[1]).toFixed(1) +
+      ' A ' + rr + ' ' + rr + ' 0 0 0 ' + c.X(T2[0]).toFixed(1) + ' ' + c.Y(T2[1]).toFixed(1) +
+      ' L ' + c.X(B[0]).toFixed(1) + ' ' + c.Y(B[1]).toFixed(1);
+    o.push(pipeBand(c, d, od));
+    // 曲げなければ角になる線（交点まで）を薄く。管の帯に隠れないよう上に重ねる
     o.push(polyline(c, [T1, V, T2], 'ghost'));
-    // 実際の管：直線 → 円弧 → 直線
-    o.push(polyline(c, [A, T1], 'pipe-line'));
-    o.push(polyline(c, [T2, B], 'pipe-line'));
-    o.push('<path class="pipe-line" fill="none" d="M ' + c.X(T1[0]).toFixed(1) + ' ' +
-      c.Y(T1[1]).toFixed(1) + ' A ' + (r.radius * c.s).toFixed(1) + ' ' +
-      (r.radius * c.s).toFixed(1) + ' 0 0 0 ' + c.X(T2[0]).toFixed(1) + ' ' +
-      c.Y(T2[1]).toFixed(1) + '"/>');
 
     o.push(vertex(c, T1));
     o.push(vertex(c, T2));
@@ -584,7 +611,7 @@
   }
 
   /** 障害物よけ（3方・4方曲げ）を横から見た図 */
-  function saddleSVG(r, kind, width) {
+  function saddleSVG(r, kind, width, od) {
     if (!r || !(r.height > 0)) return '';
 
     var h = r.height;
@@ -606,7 +633,7 @@
     var obsMid = lead + run + top / 2;
     var obs = [[obsMid - obsW / 2, 0], [obsMid + obsW / 2, -h]];
 
-    var c = makeCanvas(path.concat([obs[0], obs[1]]));
+    var c = makeCanvas(path.concat([obs[0], obs[1]]), od > 0 ? od / 2 : 0);
     if (!c) return '';
     var o = [open(c, '障害物よけの図')];
 
@@ -616,7 +643,7 @@
       '" width="' + (obsW * c.s).toFixed(1) +
       '" height="' + (h * c.s).toFixed(1) + '"/>');
 
-    o.push(polyline(c, path));
+    o.push(pipeBand(c, pathOf(c, path), od));
     [b1, b2, b3, b4].forEach(function (p, i) {
       if (kind === 3 && i === 2) return; // 3方曲げは中央が1点
       o.push(vertex(c, p));

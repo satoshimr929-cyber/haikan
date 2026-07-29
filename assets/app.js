@@ -1180,11 +1180,13 @@
   /* ------------------------------------------ 曲げ1：オフセット（振り） */
 
   var off = {
+    pipe: $('#off-pipe'), pipeOd: $('#off-pipe-od'),
     rise: $('#off-rise'), angle: $('#off-angle'),
     result: $('#off-result'), figure: $('#off-figure')
   };
 
   function renderOffset() {
+    var p = readPipe(off.pipe, off.pipeOd);
     var r;
     try {
       r = C.offset(parseFloat(off.rise.value), parseFloat(off.angle.value));
@@ -1208,7 +1210,7 @@
       '1本目は現物合わせで確かめてください。', '');
     off.result.innerHTML = html;
 
-    off.figure.innerHTML = F.offsetSVG(r);
+    off.figure.innerHTML = F.offsetSVG(r, p ? p.od : 0);
   }
 
   /* --------------------------------------------- 曲げ2：曲げの取り代 */
@@ -1276,18 +1278,20 @@
     }
     tk.result.innerHTML = html;
 
-    tk.figure.innerHTML = F.takeupSVG(r);
+    tk.figure.innerHTML = F.takeupSVG(r, p ? p.od : 0);
   }
 
   /* ----------------------------------------------- 曲げ3：障害物よけ */
 
   var sd = {
+    pipe: $('#sd-pipe'), pipeOd: $('#sd-pipe-od'),
     kind: $('#sd-kind'), height: $('#sd-height'), angle: $('#sd-angle'),
     width: $('#sd-width'), clear: $('#sd-clear'), widthRow: $('#sd-width-row'),
     result: $('#sd-result'), figure: $('#sd-figure'), marks: $('#sd-marks')
   };
 
   function renderSaddle() {
+    var p = readPipe(sd.pipe, sd.pipeOd);
     var four = sd.kind.value === '4';
     sd.widthRow.hidden = !four;
 
@@ -1338,7 +1342,8 @@
       '1本目は現物合わせで確かめてください。', '');
     sd.result.innerHTML = html;
 
-    sd.figure.innerHTML = F.saddleSVG(r, four ? 4 : 3, parseFloat(sd.width.value));
+    sd.figure.innerHTML = F.saddleSVG(r, four ? 4 : 3, parseFloat(sd.width.value),
+      p ? p.od : 0);
 
     sd.marks.innerHTML =
       '<table><thead><tr><th>墨</th><th>1つ目からの累計（mm）</th>' +
@@ -1571,6 +1576,8 @@
     fillPipeSelect(sup.pipe, 'E25');
     fillPipeSelect(stag.pipe, 'E25');
     fillPipeSelect(tk.pipe, 'E25');
+    fillPipeSelect(off.pipe, 'E25');
+    fillPipeSelect(sd.pipe, 'E25');
 
     D.PIPE_SERIES.forEach(function (s) {
       var o = document.createElement('option');
@@ -1589,9 +1596,10 @@
     bind([sup.pipe, sup.pipeOd, sup.length, sup.span, sup.margin,
       sup.stock, sup.first, sup.extra, sup.coupling, sup.saddle,
       sup.atJoint, sup.jointOffset, sup.jointMode], renderSupport);
-    bind([off.rise, off.angle], renderOffset);
+    bind([off.pipe, off.pipeOd, off.rise, off.angle], renderOffset);
     bind([tk.pipe, tk.pipeOd, tk.a, tk.b, tk.radius, tk.angle], renderTakeup);
-    bind([sd.kind, sd.height, sd.angle, sd.width, sd.clear], renderSaddle);
+    bind([sd.pipe, sd.pipeOd, sd.kind, sd.height, sd.angle, sd.width, sd.clear],
+      renderSaddle);
     bind([tbl.series, tbl.search], renderTable);
 
     // 混在モードは行が動的なので、リスト全体で拾う
